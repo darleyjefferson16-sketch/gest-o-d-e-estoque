@@ -1,0 +1,290 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saída de Estoque - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Saída de Estoque</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2><i class="fas fa-circle-arrow-up" style="color:var(--color-danger);margin-right:8px"></i>Saída de Estoque</h2>
+          <p>Registre a retirada de materiais do estoque</p>
+        </div>
+      </div>
+
+      <div class="grid-2" style="align-items:start">
+        <!-- FORM -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Nova Saída</span>
+          </div>
+          <div class="form-group">
+            <label>Produto *</label>
+            <div style="position:relative">
+              <input type="text" id="exit-product-search" class="form-control" placeholder="Digite o nome ou código do produto...">
+              <div id="exit-product-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--border-radius);z-index:100;max-height:200px;overflow-y:auto;box-shadow:var(--shadow)"></div>
+            </div>
+            <input type="hidden" id="exit-product-id">
+          </div>
+
+          <!-- PRODUCT PREVIEW -->
+          <div id="exit-product-preview" style="display:none;background:var(--bg-secondary);border-radius:var(--border-radius);padding:14px;margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-weight:700" id="eprev-name"></div>
+                <span class="product-code" id="eprev-code"></span>
+                <span id="eprev-location" class="location-tag" style="margin-left:8px"></span>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:22px;font-weight:800" id="eprev-qty"></div>
+                <div style="font-size:12px;color:var(--text-muted)" id="eprev-unit"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Quantidade *</label>
+              <input type="number" id="exit-qty" class="form-control" placeholder="0" min="1">
+            </div>
+            <div class="form-group">
+              <label>Data *</label>
+              <input type="date" id="exit-date" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Destino / Setor</label>
+            <input type="text" id="exit-destination" class="form-control" placeholder="Ex: Manutenção, Produção, Escritório...">
+          </div>
+          <div class="form-group">
+            <label>Solicitante</label>
+            <input type="text" id="exit-requester" class="form-control" placeholder="Nome do solicitante">
+          </div>
+          <div class="form-group">
+            <label>Observação</label>
+            <textarea id="exit-obs" class="form-control" placeholder="Informações adicionais..."></textarea>
+          </div>
+          <button class="btn btn-danger w-100 btn-lg" onclick="registerExit()">
+            <i class="fas fa-check"></i> Registrar Saída
+          </button>
+        </div>
+
+        <!-- RECENT EXITS -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Saídas Recentes</span>
+            <span id="exits-count" class="badge badge-danger">0</span>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Qtd</th>
+                  <th>Destino</th>
+                  <th>Data</th>
+                </tr>
+              </thead>
+              <tbody id="exits-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+
+  DB.init().then(() => {
+    session = Auth.denyUser();
+    if (!session) return;
+    UI.renderSidebar('saida');
+    initExitSearch();
+    renderExits();
+    const today = new Date().toISOString().split('T')[0];
+    const dateEl = document.getElementById('exit-date');
+    if (dateEl) dateEl.value = today;
+  });
+
+  function initExitSearch() {
+    const input = document.getElementById('exit-product-search');
+    const dropdown = document.getElementById('exit-product-dropdown');
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      if (q.length < 1) { dropdown.style.display = 'none'; return; }
+
+      const matches = DB.getProducts().filter(p =>
+        p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+      ).slice(0, 8);
+
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px">Nenhum produto encontrado</div>';
+      } else {
+        dropdown.innerHTML = matches.map(p => `
+          <div onclick="selectExitProduct('${p.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);transition:var(--transition)" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
+            <div style="display:flex;justify-content:space-between">
+              <div>
+                <div style="font-weight:600;font-size:13px">${Utils.esc(p.name)}</div>
+                <div style="font-size:11.5px;color:var(--text-muted)">${Utils.esc(p.code)}</div>
+              </div>
+              <div style="text-align:right">
+                <div style="font-weight:700;font-size:13px;color:${p.quantity === 0 ? 'var(--color-danger)' : p.quantity <= p.minStock ? 'var(--color-warning)' : 'var(--color-success)'}">${p.quantity}</div>
+                <div style="font-size:11px;color:var(--text-muted)">${Utils.esc(p.unit || '')}</div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      }
+      dropdown.style.display = 'block';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+  }
+
+  function selectExitProduct(id) {
+    const p = DB.getProduct(id);
+    if (!p) return;
+    document.getElementById('exit-product-id').value = id;
+    document.getElementById('exit-product-search').value = `${p.name} (${p.code})`;
+    document.getElementById('exit-product-dropdown').style.display = 'none';
+
+    document.getElementById('eprev-name').textContent = p.name;
+    document.getElementById('eprev-code').textContent = p.code;
+    document.getElementById('eprev-qty').textContent = p.quantity;
+    document.getElementById('eprev-unit').textContent = `${p.unit || 'unidade'} disponíveis`;
+
+    const locEl = document.getElementById('eprev-location');
+    if (p.location?.corridor) {
+      locEl.innerHTML = `<i class="fas fa-map-pin"></i>${p.location.corridor}-${p.location.shelf}-${p.location.rack}-${p.location.position}`;
+      locEl.style.display = 'inline-flex';
+    } else {
+      locEl.style.display = 'none';
+    }
+    document.getElementById('exit-product-preview').style.display = 'block';
+  }
+
+  function registerExit() {
+    const productId = document.getElementById('exit-product-id').value;
+    const qty = parseInt(document.getElementById('exit-qty').value) || 0;
+    const date = document.getElementById('exit-date').value;
+    const obs = document.getElementById('exit-obs').value.trim();
+    const destination = document.getElementById('exit-destination').value.trim();
+    const requester = document.getElementById('exit-requester').value.trim();
+
+    if (!productId) { UI.notify('Selecione um produto', 'warning'); return; }
+    if (qty <= 0) { UI.notify('Informe uma quantidade válida', 'warning'); return; }
+    if (!date) { UI.notify('Informe a data', 'warning'); return; }
+
+    const product = DB.getProduct(productId);
+    if (!product) return;
+
+    if (qty > product.quantity) {
+      UI.notify(`Quantidade insuficiente. Estoque atual: ${product.quantity} ${product.unit || ''}`, 'error');
+      return;
+    }
+
+    DB.addExit({
+      productId,
+      productCode: product.code,
+      productName: product.name,
+      quantity: qty,
+      date: new Date(date + 'T12:00:00').toISOString(),
+      destination,
+      requester,
+      observation: obs,
+      userId: session.userId,
+      userName: session.userName,
+    });
+
+    DB.addLog('ACTION', session.userId, session.userName, `Saída: ${qty}x ${product.name} → ${destination || 'sem destino'}`);
+    UI.notify(`Saída de ${qty}x ${product.name} registrada!`, 'success');
+
+    /* Limpar */
+    document.getElementById('exit-product-id').value = '';
+    document.getElementById('exit-product-search').value = '';
+    document.getElementById('exit-qty').value = '';
+    document.getElementById('exit-obs').value = '';
+    document.getElementById('exit-destination').value = '';
+    document.getElementById('exit-requester').value = '';
+    document.getElementById('exit-product-preview').style.display = 'none';
+
+    renderExits();
+    UI.renderSidebar('saida');
+  }
+
+  function renderExits() {
+    const exits = DB.getExits().slice(0, 20);
+    document.getElementById('exits-count').textContent = DB.getExits().length;
+    const tbody = document.getElementById('exits-tbody');
+
+    if (exits.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="table-empty"><i class="fas fa-inbox"></i>Nenhuma saída registrada</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = exits.map(e => `
+      <tr>
+        <td>
+          <div style="font-weight:600;font-size:13px">${Utils.esc(e.productName)}</div>
+          <div class="product-code">${Utils.esc(e.productCode)}</div>
+        </td>
+        <td style="color:var(--color-danger);font-weight:700">-${e.quantity}</td>
+        <td style="color:var(--text-muted);font-size:12px">${Utils.esc(e.destination || '-')}</td>
+        <td style="color:var(--text-muted);font-size:12px">${Utils.formatDate(e.date)}</td>
+      </tr>
+    `).join('');
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+
+

@@ -1,0 +1,337 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Dashboard</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar produtos, requisições...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+        <button class="topbar-btn" onclick="DB.createBackup('manual');UI.notify('Backup criado!','success')" title="Backup Agora">
+          <i class="fas fa-cloud-arrow-down"></i>
+        </button>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2>Dashboard</h2>
+          <p id="welcome-msg">Bem-vindo ao sistema de gestão de estoque</p>
+        </div>
+        <div class="page-header-actions">
+          <a href="entrada.html" class="btn btn-success"><i class="fas fa-arrow-down"></i> Entrada</a>
+          <a href="saida.html" class="btn btn-danger"><i class="fas fa-arrow-up"></i> Saída</a>
+          <a href="requisicoes.html" class="btn btn-primary"><i class="fas fa-plus"></i> Nova Requisição</a>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <!-- CHARTS + RECENT -->
+      <div class="grid-2" style="margin-bottom:20px">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-chart-bar" style="color:var(--color-primary-light);margin-right:8px"></i>Movimentações (30 dias)</span>
+            <select class="form-control" style="max-width:120px;padding:4px 8px" id="chart-period" onchange="renderChart()">
+              <option value="7">7 dias</option>
+              <option value="30" selected>30 dias</option>
+              <option value="90">90 dias</option>
+            </select>
+          </div>
+          <div class="chart-container">
+            <canvas id="movements-chart"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-clock-rotate-left" style="color:var(--color-accent);margin-right:8px"></i>Últimas Movimentações</span>
+            <a href="historico.html" class="btn btn-ghost btn-sm">Ver todas</a>
+          </div>
+          <ul class="recent-list" id="recent-movements"></ul>
+        </div>
+      </div>
+
+      <!-- LOW STOCK + PENDING REQUISITIONS -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-triangle-exclamation" style="color:var(--color-warning);margin-right:8px"></i>Estoque Baixo</span>
+            <a href="estoque.html" class="btn btn-ghost btn-sm">Ver estoque</a>
+          </div>
+          <div id="low-stock-list"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-clipboard-list" style="color:var(--color-danger);margin-right:8px"></i>Requisições Pendentes</span>
+            <a href="requisicoes.html" class="btn btn-ghost btn-sm">Ver todas</a>
+          </div>
+          <div id="pending-reqs-list"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+
+  DB.init().then(() => {
+    session = Auth.requireAuth();
+    if (!session) return;
+    UI.renderSidebar('dashboard');
+    document.getElementById('welcome-msg').textContent = `Olá, ${session.userName}! Hoje é ${new Date().toLocaleDateString('pt-BR', {weekday:'long',year:'numeric',month:'long',day:'numeric'})}`;
+    DB.addLog('INFO', session.userId, session.userName, 'Acessou o Dashboard');
+    renderDashboard();
+  });
+
+  function renderDashboard() {
+    renderStats();
+    renderChart();
+    renderRecentMovements();
+    renderLowStock();
+    renderPendingReqs();
+  }
+
+  function renderStats() {
+    const stats = DB.getStats();
+    const grid = document.getElementById('stats-grid');
+    grid.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-boxes"></i></div>
+        <div class="stat-info">
+          <div class="stat-value">${stats.totalProducts}</div>
+          <div class="stat-label">Produtos Cadastrados</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-layer-group"></i></div>
+        <div class="stat-info">
+          <div class="stat-value">${stats.totalStock.toLocaleString()}</div>
+          <div class="stat-label">Itens em Estoque</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon yellow"><i class="fas fa-triangle-exclamation"></i></div>
+        <div class="stat-info">
+          <div class="stat-value">${stats.lowStock}</div>
+          <div class="stat-label">Estoque Baixo/Crítico</div>
+          ${stats.lowStock > 0 ? '<div class="stat-change down"><i class="fas fa-arrow-down"></i> Atenção necessária</div>' : '<div class="stat-change up">Tudo normal</div>'}
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red"><i class="fas fa-clipboard-list"></i></div>
+        <div class="stat-info">
+          <div class="stat-value">${stats.pendingRequisitions}</div>
+          <div class="stat-label">Requisições Pendentes</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon cyan"><i class="fas fa-wrench"></i></div>
+        <div class="stat-info">
+          <div class="stat-value">${stats.toolsBorrowed}</div>
+          <div class="stat-label">Ferramentas Emprestadas</div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-right-left"></i></div>
+        <div class="stat-info">
+          <div class="stat-value">${stats.movementsToday}</div>
+          <div class="stat-label">Movimentações Hoje</div>
+        </div>
+      </div>
+    `;
+  }
+
+  let chartInstance = null;
+
+  function renderChart() {
+    const period = parseInt(document.getElementById('chart-period').value);
+    const movements = DB.getMovements();
+    const labels = [];
+    const entradas = [];
+    const saidas = [];
+
+    for (let i = period - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      labels.push(dateStr);
+
+      const dayStr = d.toDateString();
+      const dayMov = movements.filter(m => new Date(m.createdAt).toDateString() === dayStr);
+      entradas.push(dayMov.filter(m => m.type === 'entrada').reduce((s, m) => s + m.quantity, 0));
+      saidas.push(dayMov.filter(m => m.type === 'saida').reduce((s, m) => s + m.quantity, 0));
+    }
+
+    const ctx = document.getElementById('movements-chart').getContext('2d');
+    if (chartInstance) chartInstance.destroy();
+
+    chartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Entradas',
+            data: entradas,
+            backgroundColor: 'rgba(34,197,94,0.6)',
+            borderColor: '#22c55e',
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+          {
+            label: 'Saídas',
+            data: saidas,
+            backgroundColor: 'rgba(239,68,68,0.6)',
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderRadius: 4,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#94a3b8', font: { size: 12 } } },
+        },
+        scales: {
+          x: { ticks: { color: '#64748b', maxTicksLimit: 10 }, grid: { color: 'rgba(30,58,92,0.5)' } },
+          y: { ticks: { color: '#64748b' }, grid: { color: 'rgba(30,58,92,0.5)' }, beginAtZero: true },
+        },
+      },
+    });
+  }
+
+  function renderRecentMovements() {
+    const movements = DB.getMovements().slice(0, 8);
+    const container = document.getElementById('recent-movements');
+
+    if (movements.length === 0) {
+      container.innerHTML = '<li class="recent-item"><span style="color:var(--text-muted);font-size:13px">Nenhuma movimentação registrada</span></li>';
+      return;
+    }
+
+    container.innerHTML = movements.map(m => {
+      const isEntry = m.type === 'entrada';
+      return `
+        <li class="recent-item">
+          <div class="recent-icon ${isEntry ? 'stat-icon green' : 'stat-icon red'}">
+            <i class="fas ${isEntry ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+          </div>
+          <div class="recent-info">
+            <strong>${Utils.esc(m.productName)}</strong>
+            <span>${isEntry ? '+' : '-'}${m.quantity} ${m.productCode ? '· ' + m.productCode : ''}</span>
+          </div>
+          <span class="recent-time">${Utils.formatRelative(m.createdAt)}</span>
+        </li>
+      `;
+    }).join('');
+  }
+
+  function renderLowStock() {
+    const products = DB.getProducts().filter(p => p.quantity <= p.minStock);
+    const container = document.getElementById('low-stock-list');
+
+    if (products.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding:30px"><i class="fas fa-circle-check" style="color:var(--color-success)"></i><p>Todos os itens estão com estoque adequado</p></div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Produto</th><th>Qtd</th><th>Mín.</th><th>Status</th></tr></thead>
+          <tbody>
+            ${products.slice(0, 8).map(p => `
+              <tr>
+                <td>
+                  <div style="font-weight:600;font-size:13px">${Utils.esc(p.name)}</div>
+                  <div class="product-code">${p.code}</div>
+                </td>
+                <td style="font-weight:700;color:${p.quantity === 0 ? 'var(--color-danger)' : 'var(--color-warning)'}">${p.quantity}</td>
+                <td style="color:var(--text-muted)">${p.minStock}</td>
+                <td>${Utils.stockBadge(p)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderPendingReqs() {
+    const reqs = DB.getRequisitions().filter(r => r.status === 'pendente');
+    const container = document.getElementById('pending-reqs-list');
+
+    if (reqs.length === 0) {
+      container.innerHTML = '<div class="empty-state" style="padding:30px"><i class="fas fa-clipboard-check" style="color:var(--color-success)"></i><p>Nenhuma requisição pendente</p></div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Código</th><th>Solicitante</th><th>Itens</th><th>Data</th><th></th></tr></thead>
+          <tbody>
+            ${reqs.slice(0, 6).map(r => `
+              <tr>
+                <td><span class="product-code">${r.code}</span></td>
+                <td>${Utils.esc(r.requesterName)}</td>
+                <td><span class="badge badge-primary">${r.items ? r.items.length : 0} itens</span></td>
+                <td style="color:var(--text-muted)">${Utils.formatDate(r.createdAt)}</td>
+                <td><a href="requisicoes.html" class="btn btn-primary btn-sm">Atender</a></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+
+

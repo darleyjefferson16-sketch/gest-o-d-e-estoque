@@ -1,0 +1,417 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Usuários - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Gestão de Usuários</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2>Gestão de Usuários</h2>
+          <p>Cadastre e gerencie os colaboradores com acesso ao sistema</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openUserModal()"><i class="fas fa-plus"></i> Novo Usuário</button>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:20px" id="user-stats"></div>
+
+      <!-- TABLE -->
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Colaborador</th>
+                <th>Email</th>
+                <th>Cargo</th>
+                <th>Setor</th>
+                <th>Nível de Acesso</th>
+                <th>Criado em</th>
+                <th>Último Login</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="users-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: USUÁRIO -->
+<div class="modal-overlay" id="modal-user">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="user-modal-title">Novo Usuário</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-user')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="user-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome Completo *</label>
+          <input type="text" id="user-name" class="form-control" placeholder="Nome do colaborador">
+        </div>
+        <div class="form-group">
+          <label>Email *</label>
+          <input type="email" id="user-email" class="form-control" placeholder="email@empresa.com">
+        </div>
+      </div>
+      <div id="password-field" class="form-group">
+        <label>Senha *</label>
+        <div class="password-input">
+          <input type="password" id="user-password" class="form-control" placeholder="Mínimo 6 caracteres">
+          <button class="password-toggle" type="button" onclick="toggleUserPass()"><i class="fas fa-eye"></i></button>
+        </div>
+        <div class="form-text">A senha deverá ser trocada no primeiro acesso.</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Cargo</label>
+          <input type="text" id="user-position" class="form-control" placeholder="Ex: Técnico, Supervisor...">
+        </div>
+        <div class="form-group">
+          <label>Setor</label>
+          <input type="text" id="user-sector" class="form-control" placeholder="Ex: Manutenção, TI...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Nível de Acesso *</label>
+        <select id="user-role" class="form-control">
+          <option value="Usuário">Usuário - Acesso básico</option>
+          <option value="Almoxarife">Almoxarife - Pode atender requisições e gerenciar estoque</option>
+          <option value="Administrador">Administrador - Acesso completo</option>
+          <option value="Desenvolvedor">Desenvolvedor - Acesso total ao sistema</option>
+        </select>
+        <div class="form-text" id="role-desc"></div>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="user-active" checked>
+          Usuário ativo
+        </label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-user')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveUser()"><i class="fas fa-floppy-disk"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: RESET SENHA -->
+<div class="modal-overlay" id="modal-reset-pass">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">Resetar Senha</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-reset-pass')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="reset-user-id">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+        Defina uma nova senha para: <strong id="reset-user-name"></strong>
+      </p>
+      <div class="form-group">
+        <label>Nova Senha *</label>
+        <div class="password-input">
+          <input type="password" id="reset-new-pass" class="form-control" placeholder="Nova senha">
+          <button class="password-toggle" type="button" onclick="togglePass('reset-new-pass')"><i class="fas fa-eye"></i></button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Confirmar Nova Senha</label>
+        <input type="password" id="reset-confirm-pass" class="form-control" placeholder="Confirmar senha">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-reset-pass')">Cancelar</button>
+      <button class="btn btn-warning" onclick="confirmReset()"><i class="fas fa-key"></i> Resetar Senha</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+
+  DB.init().then(() => {
+    session = Auth.requireRole('Administrador', 'Desenvolvedor');
+    if (!session) return;
+    UI.renderSidebar('usuarios');
+    renderStats();
+    renderUsers();
+  });
+
+  function updateRoleDesc() {
+    const role = document.getElementById('user-role').value;
+    const descs = {
+      'Usuário': 'Pode criar requisições e consultar o estoque.',
+      'Almoxarife': 'Pode gerenciar entradas, saídas e atender requisições.',
+      'Administrador': 'Acesso completo, incluindo gestão de usuários.',
+      'Desenvolvedor': 'Acesso total, incluindo painel de desenvolvedor e logs.',
+    };
+    document.getElementById('role-desc').textContent = descs[role] || '';
+  }
+
+  function renderStats() {
+    const users = DB.getUsers();
+    const total = users.length;
+    const active = users.filter(u => u.active).length;
+    const inactive = users.filter(u => !u.active).length;
+    const admins = users.filter(u => u.role === 'Administrador' || u.role === 'Desenvolvedor').length;
+
+    document.getElementById('user-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-users"></i></div><div class="stat-info"><div class="stat-value">${total}</div><div class="stat-label">Total de Usuários</div></div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-user-check"></i></div><div class="stat-info"><div class="stat-value">${active}</div><div class="stat-label">Ativos</div></div></div>
+      <div class="stat-card"><div class="stat-icon red"><i class="fas fa-user-xmark"></i></div><div class="stat-info"><div class="stat-value">${inactive}</div><div class="stat-label">Inativos</div></div></div>
+      <div class="stat-card"><div class="stat-icon cyan"><i class="fas fa-user-shield"></i></div><div class="stat-info"><div class="stat-value">${admins}</div><div class="stat-label">Administradores</div></div></div>
+    `;
+  }
+
+  function renderUsers() {
+    const users = DB.getUsers();
+    const tbody = document.getElementById('users-tbody');
+
+    const roleBadge = (role) => {
+      const map = {
+        'Administrador': 'badge-danger',
+        'Desenvolvedor': 'badge-info',
+        'Almoxarife': 'badge-warning',
+        'Usuário': 'badge-muted',
+      };
+      return `<span class="badge ${map[role] || 'badge-muted'}">${Utils.esc(role)}</span>`;
+    };
+
+    tbody.innerHTML = users.map(u => `
+      <tr ${!u.active ? 'style="opacity:0.5"' : ''}>
+        <td>
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="width:32px;height:32px;background:var(--color-primary);border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">
+              ${u.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style="font-weight:600">${Utils.esc(u.name)}</div>
+              ${u.position ? `<div style="font-size:11.5px;color:var(--text-muted)">${Utils.esc(u.position)}</div>` : ''}
+            </div>
+          </div>
+        </td>
+        <td style="color:var(--text-secondary)">${Utils.esc(u.email)}</td>
+        <td style="color:var(--text-muted);font-size:12px">${Utils.esc(u.position || '-')}</td>
+        <td style="color:var(--text-muted);font-size:12px">${Utils.esc(u.sector || '-')}</td>
+        <td>${roleBadge(u.role)}</td>
+        <td style="color:var(--text-muted);font-size:12px">${Utils.formatDate(u.createdAt)}</td>
+        <td style="color:var(--text-muted);font-size:12px">${u.lastLogin ? Utils.formatDateTime(u.lastLogin) : 'Nunca'}</td>
+        <td>
+          ${u.active
+            ? '<span class="badge badge-success"><i class="fas fa-circle" style="font-size:7px"></i> Ativo</span>'
+            : '<span class="badge badge-muted">Inativo</span>'}
+        </td>
+        <td>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm btn-icon" onclick="openUserModal('${u.id}')" data-tooltip="Editar"><i class="fas fa-pen-to-square"></i></button>
+            <button class="btn btn-ghost btn-sm btn-icon" onclick="openResetPass('${u.id}')" data-tooltip="Resetar senha"><i class="fas fa-key"></i></button>
+            ${u.id !== session.userId ? `
+              <button class="btn btn-ghost btn-sm btn-icon" onclick="toggleUserActive('${u.id}')" data-tooltip="${u.active ? 'Desativar' : 'Ativar'}">
+                <i class="fas ${u.active ? 'fa-user-xmark' : 'fa-user-check'}"></i>
+              </button>
+              <button class="btn btn-danger btn-sm btn-icon" onclick="deleteUser('${u.id}')" data-tooltip="Excluir"><i class="fas fa-trash"></i></button>
+            ` : '<span style="font-size:11px;color:var(--text-muted);padding:0 8px">(você)</span>'}
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function openUserModal(id) {
+    if (id) {
+      const u = DB.getUser(id);
+      if (!u) return;
+      document.getElementById('user-modal-title').textContent = 'Editar Usuário';
+      document.getElementById('user-id').value = u.id;
+      document.getElementById('user-name').value = u.name;
+      document.getElementById('user-email').value = u.email;
+      document.getElementById('user-position').value = u.position || '';
+      document.getElementById('user-sector').value = u.sector || '';
+      document.getElementById('user-role').value = u.role;
+      document.getElementById('user-active').checked = u.active;
+      document.getElementById('password-field').style.display = 'none';
+    } else {
+      document.getElementById('user-modal-title').textContent = 'Novo Usuário';
+      document.getElementById('user-id').value = '';
+      document.getElementById('user-name').value = '';
+      document.getElementById('user-email').value = '';
+      document.getElementById('user-password').value = '';
+      document.getElementById('user-position').value = '';
+      document.getElementById('user-sector').value = '';
+      document.getElementById('user-role').value = 'Usuário';
+      document.getElementById('user-active').checked = true;
+      document.getElementById('password-field').style.display = 'block';
+    }
+    updateRoleDesc();
+    UI.openModal('modal-user');
+  }
+
+  async function saveUser() {
+    const id = document.getElementById('user-id').value;
+    const name = document.getElementById('user-name').value.trim();
+    const email = document.getElementById('user-email').value.trim().toLowerCase();
+    const password = document.getElementById('user-password').value;
+    const position = document.getElementById('user-position').value.trim();
+    const sector = document.getElementById('user-sector').value.trim();
+    const role = document.getElementById('user-role').value;
+    const active = document.getElementById('user-active').checked;
+
+    if (!name || !email) { UI.notify('Preencha nome e email', 'warning'); return; }
+
+    if (!id && !password) { UI.notify('Informe a senha para o novo usuário', 'warning'); return; }
+    if (!id && password.length < 6) { UI.notify('A senha deve ter no mínimo 6 caracteres', 'warning'); return; }
+
+    /* Checar email duplicado */
+    const existing = DB.getUserByEmail(email);
+    if (existing && existing.id !== id) {
+      UI.notify('Este email já está cadastrado', 'error');
+      return;
+    }
+
+    const existingUser = id ? DB.getUser(id) : {};
+    const user = {
+      ...(existingUser || {}),
+      id: id || DB._uuid(),
+      name, email, position, sector, role, active,
+      createdAt: existingUser?.createdAt || new Date().toISOString(),
+      createdBy: existingUser?.createdBy || session.userId,
+      lastLogin: existingUser?.lastLogin || null,
+    };
+
+    if (!id) {
+      /* Use PBKDF2 for new users */
+      user.password = await DB.hashPassword(password);
+    }
+
+    DB.saveUser(user);
+    DB.addLog('ACTION', session.userId, session.userName, `${id ? 'Editou' : 'Cadastrou'} usuário: ${name} (${role})`);
+    UI.closeModal('modal-user');
+    UI.notify(`Usuário ${id ? 'atualizado' : 'cadastrado'} com sucesso!`, 'success');
+    renderStats();
+    renderUsers();
+  }
+
+  function toggleUserPass() {
+    togglePass('user-password');
+  }
+
+  function togglePass(inputId) {
+    const input = document.getElementById(inputId);
+    const btn = input.nextElementSibling;
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (btn) btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    } else {
+      input.type = 'password';
+      if (btn) btn.innerHTML = '<i class="fas fa-eye"></i>';
+    }
+  }
+
+  function openResetPass(id) {
+    const u = DB.getUser(id);
+    if (!u) return;
+    document.getElementById('reset-user-id').value = id;
+    document.getElementById('reset-user-name').textContent = u.name;
+    document.getElementById('reset-new-pass').value = '';
+    document.getElementById('reset-confirm-pass').value = '';
+    UI.openModal('modal-reset-pass');
+  }
+
+  async function confirmReset() {
+    const id = document.getElementById('reset-user-id').value;
+    const newPass = document.getElementById('reset-new-pass').value;
+    const confirmPass = document.getElementById('reset-confirm-pass').value;
+
+    if (newPass.length < 6) { UI.notify('A senha deve ter no mínimo 6 caracteres', 'warning'); return; }
+    if (newPass !== confirmPass) { UI.notify('As senhas não coincidem', 'warning'); return; }
+
+    const result = await Auth.adminResetPassword(id, newPass, session.userId, session.userName);
+    if (result.success) {
+      UI.closeModal('modal-reset-pass');
+      UI.notify('Senha resetada com sucesso!', 'success');
+    } else {
+      UI.notify(result.error || 'Erro ao resetar senha', 'error');
+    }
+  }
+
+  async function toggleUserActive(id) {
+    const u = DB.getUser(id);
+    if (!u) return;
+    const action = u.active ? 'desativar' : 'ativar';
+    const ok = await UI.confirm(`Deseja ${action} o usuário "${u.name}"?`, `${action.charAt(0).toUpperCase() + action.slice(1)} Usuário`);
+    if (!ok) return;
+    u.active = !u.active;
+    DB.saveUser(u);
+    DB.addLog('ACTION', session.userId, session.userName, `${action === 'desativar' ? 'Desativou' : 'Ativou'} usuário: ${u.name}`);
+    UI.notify(`Usuário ${u.active ? 'ativado' : 'desativado'}!`, u.active ? 'success' : 'warning');
+    renderStats();
+    renderUsers();
+  }
+
+  async function deleteUser(id) {
+    const u = DB.getUser(id);
+    if (!u) return;
+    const ok = await UI.confirm(`Excluir permanentemente o usuário "${u.name}"?`, 'Excluir Usuário');
+    if (!ok) return;
+    DB.deleteUser(id);
+    DB.addLog('ACTION', session.userId, session.userName, `Excluiu usuário: ${u.name}`);
+    UI.notify('Usuário excluído!', 'success');
+    renderStats();
+    renderUsers();
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+
+

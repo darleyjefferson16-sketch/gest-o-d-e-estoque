@@ -1,0 +1,527 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estoque - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Estoque</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2>Gestão de Estoque</h2>
+          <p>Cadastro e controle de produtos, materiais e equipamentos</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-ghost" onclick="printSelectedLabels()"><i class="fas fa-print"></i> Etiquetas</button>
+          <button class="btn btn-ghost" onclick="exportProducts()"><i class="fas fa-download"></i> Exportar</button>
+          <button class="btn btn-primary" onclick="openProductModal()"><i class="fas fa-plus"></i> Novo Produto</button>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px" id="stock-stats"></div>
+
+      <!-- FILTERS -->
+      <div class="card" style="margin-bottom:20px">
+        <div class="filters-bar" style="margin-bottom:0">
+          <div class="search-input" style="position:relative;flex:1;max-width:320px">
+            <i class="fas fa-search"></i>
+            <input type="text" id="search-products" class="form-control" placeholder="Buscar por nome, código..." oninput="renderTable()">
+          </div>
+          <select class="form-control" id="filter-category" onchange="renderTable()" style="max-width:180px">
+            <option value="">Todas as categorias</option>
+          </select>
+          <select class="form-control" id="filter-stock" onchange="renderTable()" style="max-width:160px">
+            <option value="">Todos os status</option>
+            <option value="ok">Normal</option>
+            <option value="low">Estoque Baixo</option>
+            <option value="critical">Crítico/Zerado</option>
+          </select>
+          <select class="form-control" id="filter-corridor" onchange="renderTable()" style="max-width:140px">
+            <option value="">Todos os corredores</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- TABLE -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="table-count">Produtos</span>
+          <div style="display:flex;gap:8px">
+            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-secondary);cursor:pointer">
+              <input type="checkbox" id="select-all" onchange="toggleSelectAll(this)"> Selecionar todos
+            </label>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:40px"><input type="checkbox" id="select-all-2" onchange="toggleSelectAll(this)"></th>
+                <th>Código</th>
+                <th>Nome</th>
+                <th>Categoria</th>
+                <th>Quantidade</th>
+                <th>Unidade</th>
+                <th>Estoque Mín.</th>
+                <th>Localização</th>
+                <th>Status</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="products-tbody"></tbody>
+          </table>
+        </div>
+        <div id="pagination"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: PRODUTO -->
+<div class="modal-overlay" id="modal-product">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="modal-product-title">Novo Produto</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-product')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="product-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome do Item *</label>
+          <input type="text" id="product-name" class="form-control" placeholder="Ex: Parafuso M10">
+        </div>
+        <div class="form-group">
+          <label>Categoria *</label>
+          <select id="product-category" class="form-control"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Descrição</label>
+        <textarea id="product-desc" class="form-control" placeholder="Descrição detalhada do item..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Quantidade *</label>
+          <input type="number" id="product-qty" class="form-control" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>Unidade *</label>
+          <select id="product-unit" class="form-control">
+            <option>unidade</option>
+            <option>caixa</option>
+            <option>metro</option>
+            <option>rolo</option>
+            <option>litro</option>
+            <option>kg</option>
+            <option>par</option>
+            <option>pacote</option>
+            <option>peça</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Estoque Mínimo *</label>
+          <input type="number" id="product-min" class="form-control" placeholder="0" min="0">
+        </div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:var(--border-radius);padding:16px;margin-bottom:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-secondary)">
+          <i class="fas fa-location-dot" style="margin-right:6px;color:var(--color-accent)"></i>Localização Física
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Corredor</label>
+            <input type="text" id="product-corridor" class="form-control" placeholder="Ex: A">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Estante</label>
+            <input type="text" id="product-shelf" class="form-control" placeholder="Ex: 1">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Prateleira</label>
+            <input type="text" id="product-rack" class="form-control" placeholder="Ex: 2">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Posição</label>
+            <input type="text" id="product-pos" class="form-control" placeholder="Ex: B">
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-product')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveProduct()"><i class="fas fa-floppy-disk"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VER PRODUTO -->
+<div class="modal-overlay" id="modal-view-product">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="view-product-title">Detalhes do Produto</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-view-product')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="view-product-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-product')">Fechar</button>
+      <button class="btn btn-outline" id="view-edit-btn">Editar</button>
+      <button class="btn btn-secondary" id="view-print-btn"><i class="fas fa-print"></i> Etiqueta</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+  let currentPage = 1;
+  const perPage = 15;
+
+  DB.init().then(async () => {
+    session = Auth.requireAuth();
+    if (session) {
+      UI.init('estoque');
+      DB.addLog('INFO', session.userId, session.userName, 'Acessou Estoque');
+      populateFilters();
+      renderStats();
+      renderTable();
+    }
+  });
+
+  function populateFilters() {
+    const settings = DB.getSettings();
+    const categories = settings.categories || [];
+    const catSelect = document.getElementById('filter-category');
+    const productCatSelect = document.getElementById('product-category');
+
+    categories.forEach(c => {
+      catSelect.innerHTML += `<option value="${Utils.esc(c)}">${Utils.esc(c)}</option>`;
+      productCatSelect.innerHTML += `<option value="${Utils.esc(c)}">${Utils.esc(c)}</option>`;
+    });
+
+    const products = DB.getProducts();
+    const corridors = [...new Set(products.map(p => p.location?.corridor).filter(Boolean))].sort();
+    const corrSelect = document.getElementById('filter-corridor');
+    corridors.forEach(c => {
+      corrSelect.innerHTML += `<option value="${Utils.esc(c)}">Corredor ${Utils.esc(c)}</option>`;
+    });
+  }
+
+  function renderStats() {
+    const products = DB.getProducts();
+    const total = products.length;
+    const totalQty = products.reduce((s, p) => s + (p.quantity || 0), 0);
+    const low = products.filter(p => p.quantity > 0 && p.quantity <= p.minStock).length;
+    const critical = products.filter(p => p.quantity === 0).length;
+    const ok = products.filter(p => p.quantity > p.minStock).length;
+
+    document.getElementById('stock-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-boxes"></i></div><div class="stat-info"><div class="stat-value">${total}</div><div class="stat-label">Total de Produtos</div></div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-layer-group"></i></div><div class="stat-info"><div class="stat-value">${totalQty.toLocaleString()}</div><div class="stat-label">Itens em Estoque</div></div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-circle-check"></i></div><div class="stat-info"><div class="stat-value">${ok}</div><div class="stat-label">Estoque Normal</div></div></div>
+      <div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-circle-exclamation"></i></div><div class="stat-info"><div class="stat-value">${low}</div><div class="stat-label">Estoque Baixo</div></div></div>
+      <div class="stat-card"><div class="stat-icon red"><i class="fas fa-circle-xmark"></i></div><div class="stat-info"><div class="stat-value">${critical}</div><div class="stat-label">Estoque Zerado</div></div></div>
+    `;
+  }
+
+  function getFiltered() {
+    const q = (document.getElementById('search-products').value || '').toLowerCase();
+    const cat = document.getElementById('filter-category').value;
+    const stock = document.getElementById('filter-stock').value;
+    const corridor = document.getElementById('filter-corridor').value;
+
+    return DB.getProducts().filter(p => {
+      if (q && !p.name.toLowerCase().includes(q) && !p.code.toLowerCase().includes(q) && !(p.description || '').toLowerCase().includes(q)) return false;
+      if (cat && p.category !== cat) return false;
+      if (corridor && p.location?.corridor !== corridor) return false;
+      if (stock) {
+        const level = Utils.stockLevel(p);
+        if (stock === 'ok' && level !== 'ok') return false;
+        if (stock === 'low' && level !== 'low') return false;
+        if (stock === 'critical' && level !== 'critical') return false;
+      }
+      return true;
+    });
+  }
+
+  function renderTable() {
+    const filtered = getFiltered();
+    const paginated = UI.paginate(filtered, currentPage, perPage);
+
+    document.getElementById('table-count').textContent =
+      `${filtered.length} produto(s) encontrado(s)`;
+
+    const tbody = document.getElementById('products-tbody');
+
+    if (paginated.items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="10" class="table-empty"><i class="fas fa-box-open"></i>Nenhum produto encontrado</td></tr>`;
+    } else {
+      tbody.innerHTML = paginated.items.map(p => {
+        const loc = p.location ? `${p.location.corridor}-${p.location.shelf}-${p.location.rack}-${p.location.position}` : '-';
+        const level = Utils.stockLevel(p);
+        const qtyClass = level === 'critical' ? 'stock-critical' : level === 'low' ? 'stock-low' : 'stock-ok';
+        return `
+          <tr>
+            <td><input type="checkbox" class="product-checkbox" value="${p.id}"></td>
+            <td><span class="product-code">${Utils.esc(p.code)}</span></td>
+            <td>
+              <div style="font-weight:600">${Utils.esc(p.name)}</div>
+              ${p.description ? `<div style="font-size:11.5px;color:var(--text-muted)">${Utils.esc(p.description.substring(0, 60))}</div>` : ''}
+            </td>
+            <td><span class="badge badge-primary">${Utils.esc(p.category || '-')}</span></td>
+            <td class="${qtyClass}" style="font-weight:700;font-size:15px">${p.quantity}</td>
+            <td style="color:var(--text-muted)">${Utils.esc(p.unit || '')}</td>
+            <td style="color:var(--text-muted)">${p.minStock}</td>
+            <td><span class="location-tag"><i class="fas fa-map-pin"></i>${Utils.esc(loc)}</span></td>
+            <td>${Utils.stockBadge(p)}</td>
+            <td>
+              <div style="display:flex;gap:6px">
+                <button class="btn btn-ghost btn-sm btn-icon" onclick="viewProduct('${p.id}')" data-tooltip="Ver detalhes"><i class="fas fa-eye"></i></button>
+                <button class="btn btn-outline btn-sm btn-icon" onclick="openProductModal('${p.id}')" data-tooltip="Editar"><i class="fas fa-pen-to-square"></i></button>
+                <button class="btn btn-ghost btn-sm btn-icon" onclick="printLabel('${p.id}')" data-tooltip="Etiqueta"><i class="fas fa-print"></i></button>
+                <button class="btn btn-danger btn-sm btn-icon" onclick="deleteProduct('${p.id}')" data-tooltip="Excluir"><i class="fas fa-trash"></i></button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    UI.renderPagination(document.getElementById('pagination'), currentPage, paginated.totalPages,
+      (p) => { currentPage = p; renderTable(); }
+    );
+  }
+
+  function toggleSelectAll(cb) {
+    document.querySelectorAll('.product-checkbox').forEach(c => c.checked = cb.checked);
+    document.querySelectorAll('#select-all, #select-all-2').forEach(c => c.checked = cb.checked);
+  }
+
+  function openProductModal(id) {
+    if (id) {
+      const p = DB.getProduct(id);
+      if (!p) return;
+      document.getElementById('modal-product-title').textContent = 'Editar Produto';
+      document.getElementById('product-id').value = p.id;
+      document.getElementById('product-name').value = p.name;
+      document.getElementById('product-category').value = p.category || '';
+      document.getElementById('product-desc').value = p.description || '';
+      document.getElementById('product-qty').value = p.quantity;
+      document.getElementById('product-unit').value = p.unit || 'unidade';
+      document.getElementById('product-min').value = p.minStock || 0;
+      document.getElementById('product-corridor').value = p.location?.corridor || '';
+      document.getElementById('product-shelf').value = p.location?.shelf || '';
+      document.getElementById('product-rack').value = p.location?.rack || '';
+      document.getElementById('product-pos').value = p.location?.position || '';
+    } else {
+      document.getElementById('modal-product-title').textContent = 'Novo Produto';
+      document.getElementById('product-id').value = '';
+      document.getElementById('product-name').value = '';
+      document.getElementById('product-category').value = '';
+      document.getElementById('product-desc').value = '';
+      document.getElementById('product-qty').value = '';
+      document.getElementById('product-unit').value = 'unidade';
+      document.getElementById('product-min').value = '5';
+      document.getElementById('product-corridor').value = '';
+      document.getElementById('product-shelf').value = '';
+      document.getElementById('product-rack').value = '';
+      document.getElementById('product-pos').value = '';
+    }
+    UI.openModal('modal-product');
+  }
+
+  function saveProduct() {
+    const id = document.getElementById('product-id').value;
+    const name = document.getElementById('product-name').value.trim();
+    const category = document.getElementById('product-category').value;
+    const desc = document.getElementById('product-desc').value.trim();
+    const qty = parseInt(document.getElementById('product-qty').value) || 0;
+    const unit = document.getElementById('product-unit').value;
+    const minStock = parseInt(document.getElementById('product-min').value) || 0;
+    const corridor = document.getElementById('product-corridor').value.trim().toUpperCase();
+    const shelf = document.getElementById('product-shelf').value.trim();
+    const rack = document.getElementById('product-rack').value.trim();
+    const pos = document.getElementById('product-pos').value.trim().toUpperCase();
+
+    if (!name || !category) {
+      UI.notify('Preencha os campos obrigatórios (Nome e Categoria)', 'warning');
+      return;
+    }
+
+    const product = {
+      id: id || DB._uuid(),
+      name, category, description: desc, quantity: qty, unit, minStock,
+      location: { corridor, shelf, rack, position: pos },
+      createdAt: id ? DB.getProduct(id)?.createdAt : new Date().toISOString(),
+      createdBy: session.userId,
+    };
+
+    if (!id) {
+      product.code = DB._productCode();
+    } else {
+      product.code = DB.getProduct(id).code;
+    }
+
+    DB.saveProduct(product);
+
+    if (!id) {
+      DB.addMovement({
+        productId: product.id,
+        productCode: product.code,
+        productName: product.name,
+        type: 'entrada',
+        quantity: qty,
+        date: new Date().toISOString(),
+        userId: session.userId,
+        userName: session.userName,
+        observation: 'Cadastro inicial',
+        reference: null,
+      });
+    }
+
+    DB.addLog('ACTION', session.userId, session.userName, `${id ? 'Editou' : 'Cadastrou'} produto: ${name}`);
+    UI.closeModal('modal-product');
+    UI.notify(`Produto ${id ? 'atualizado' : 'cadastrado'} com sucesso!`, 'success');
+    renderStats();
+    renderTable();
+
+    /* Update sidebar badge */
+    UI.renderSidebar('estoque');
+  }
+
+  function viewProduct(id) {
+    const p = DB.getProduct(id);
+    if (!p) return;
+
+    const loc = p.location ? `Corredor ${p.location.corridor} / Estante ${p.location.shelf} / Prateleira ${p.location.rack} / Posição ${p.location.position}` : 'Não definida';
+    const level = Utils.stockLevel(p);
+    const progressPct = p.minStock > 0 ? Math.min(100, Math.round((p.quantity / p.minStock) * 100)) : 100;
+    const progressClass = level === 'critical' ? 'danger' : level === 'low' ? 'warning' : 'success';
+
+    document.getElementById('view-product-title').textContent = p.name;
+    document.getElementById('view-product-body').innerHTML = `
+      <div class="grid-2" style="gap:24px">
+        <div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Código</div>
+            <span class="product-code" style="font-size:16px">${Utils.esc(p.code)}</span>
+          </div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Categoria</div>
+            <span class="badge badge-primary" style="font-size:13px">${Utils.esc(p.category || '-')}</span>
+          </div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Descrição</div>
+            <div style="font-size:13.5px">${Utils.esc(p.description || 'Sem descrição')}</div>
+          </div>
+          <div style="margin-bottom:16px">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Quantidade em Estoque</div>
+            <div style="font-size:28px;font-weight:800;color:${level === 'critical' ? 'var(--color-danger)' : level === 'low' ? 'var(--color-warning)' : 'var(--color-success)'}">${p.quantity} <span style="font-size:14px;font-weight:400">${Utils.esc(p.unit || '')}</span></div>
+            <div class="progress-bar"><div class="progress-fill ${progressClass}" style="width:${progressPct}%"></div></div>
+            <div style="font-size:11.5px;color:var(--text-muted);margin-top:4px">Mínimo: ${p.minStock} ${Utils.esc(p.unit || '')} · ${Utils.stockBadge(p)}</div>
+          </div>
+          <div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Localização</div>
+            <span class="location-tag"><i class="fas fa-map-pin"></i>${Utils.esc(loc)}</span>
+          </div>
+          <div style="margin-top:12px;font-size:11.5px;color:var(--text-muted)">
+            Cadastrado em: ${Utils.formatDate(p.createdAt)}
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">QR Code</div>
+          <div id="view-qr-${p.id}" style="background:white;padding:12px;border-radius:var(--border-radius)"></div>
+          <div style="font-size:11px;color:var(--text-muted);text-align:center">Escaneie para identificar o produto</div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('view-edit-btn').onclick = () => {
+      UI.closeModal('modal-view-product');
+      openProductModal(id);
+    };
+    document.getElementById('view-print-btn').onclick = () => Utils.printLabel(p);
+
+    UI.openModal('modal-view-product');
+    setTimeout(() => Utils.generateQR(`view-qr-${p.id}`, p.code, 130), 100);
+  }
+
+  async function deleteProduct(id) {
+    const p = DB.getProduct(id);
+    if (!p) return;
+    const ok = await UI.confirm(`Excluir o produto "${p.name}"? Esta ação não pode ser desfeita.`, 'Excluir Produto');
+    if (!ok) return;
+    DB.deleteProduct(id);
+    DB.addLog('ACTION', session.userId, session.userName, `Excluiu produto: ${p.name}`);
+    UI.notify('Produto excluído!', 'success');
+    renderStats();
+    renderTable();
+  }
+
+  function printLabel(id) {
+    const p = DB.getProduct(id);
+    if (p) Utils.printLabel(p);
+  }
+
+  function printSelectedLabels() {
+    const checked = [...document.querySelectorAll('.product-checkbox:checked')].map(c => c.value);
+    if (checked.length === 0) {
+      UI.notify('Selecione pelo menos um produto para imprimir etiquetas', 'warning');
+      return;
+    }
+    const products = checked.map(id => DB.getProduct(id)).filter(Boolean);
+    Utils.printLabels(products);
+  }
+
+  function exportProducts() {
+    const csv = DB.exportCSV('products');
+    Utils.downloadCSV(csv, `estoque_${new Date().toISOString().split('T')[0]}.csv`);
+    UI.notify('Exportação realizada!', 'success');
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+

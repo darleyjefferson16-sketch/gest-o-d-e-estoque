@@ -1,0 +1,391 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mapa do Estoque - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Mapa do Estoque</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2>Mapa Visual do Almoxarifado</h2>
+          <p>Visualize a localização de cada item no estoque</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-ghost" onclick="renderMap()"><i class="fas fa-arrows-rotate"></i> Atualizar</button>
+          <button class="btn btn-primary" onclick="UI.openModal('modal-config-map')">
+            <i class="fas fa-cog"></i> Configurar Mapa
+          </button>
+        </div>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="map-legend">
+        <div class="map-legend-item">
+          <div class="map-legend-dot" style="background:rgba(34,197,94,0.5);border:2px solid var(--color-success)"></div>
+          <span>Posição com item</span>
+        </div>
+        <div class="map-legend-item">
+          <div class="map-legend-dot" style="background:rgba(245,158,11,0.3);border:2px solid var(--color-warning)"></div>
+          <span>Estoque baixo</span>
+        </div>
+        <div class="map-legend-item">
+          <div class="map-legend-dot" style="background:rgba(239,68,68,0.1);border:2px solid var(--color-danger)"></div>
+          <span>Posição vazia / item zerado</span>
+        </div>
+        <div class="map-legend-item">
+          <div class="map-legend-dot" style="background:var(--bg-hover);border:2px solid var(--border-color)"></div>
+          <span>Posição sem produto</span>
+        </div>
+      </div>
+
+      <div id="map-container" class="map-container"></div>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: POSIÇÃO DETALHES -->
+<div class="modal-overlay" id="modal-position">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="pos-modal-title">Posição</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-position')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="pos-modal-body"></div>
+    <div class="modal-footer" id="pos-modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-position')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: MOVER ITEM -->
+<div class="modal-overlay" id="modal-move">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">Mover Item de Posição</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-move')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">Nova localização para: <strong id="move-product-name"></strong></p>
+      <input type="hidden" id="move-product-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Corredor</label>
+          <input type="text" id="move-corridor" class="form-control" placeholder="Ex: A">
+        </div>
+        <div class="form-group">
+          <label>Estante</label>
+          <input type="text" id="move-shelf" class="form-control" placeholder="Ex: 1">
+        </div>
+        <div class="form-group">
+          <label>Prateleira</label>
+          <input type="text" id="move-rack" class="form-control" placeholder="Ex: 2">
+        </div>
+        <div class="form-group">
+          <label>Posição</label>
+          <input type="text" id="move-pos" class="form-control" placeholder="Ex: B">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-move')">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmMove()"><i class="fas fa-up-down-left-right"></i> Mover</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CONFIG MAP -->
+<div class="modal-overlay" id="modal-config-map">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">Configurar Mapa</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-config-map')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:16px">
+        O mapa é gerado automaticamente com base na localização dos produtos cadastrados.<br><br>
+        Para alterar a estrutura do almoxarifado, edite a localização dos produtos no módulo <strong>Estoque</strong>.
+      </p>
+      <div style="background:var(--bg-secondary);border-radius:var(--border-radius);padding:14px">
+        <div id="map-summary" style="font-size:13px;color:var(--text-secondary)"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-config-map')">Fechar</button>
+      <a href="estoque.html" class="btn btn-primary"><i class="fas fa-boxes"></i> Ir para Estoque</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+  let currentMoveProductId = null;
+
+  DB.init().then(async () => {
+    session = Auth.requireAuth();
+    if (session) {
+      UI.init('mapa');
+      DB.addLog('INFO', session.userId, session.userName, 'Acessou Mapa do Estoque');
+      renderMap();
+    }
+  });
+
+  function buildMapStructure() {
+    /* Mapear posições a partir dos produtos */
+    const products = DB.getProducts();
+    const structure = {};
+
+    products.forEach(p => {
+      if (!p.location) return;
+      const { corridor, shelf, rack, position } = p.location;
+      if (!corridor) return;
+
+      if (!structure[corridor]) structure[corridor] = {};
+      const shelfKey = `Estante ${shelf || '?'}`;
+      if (!structure[corridor][shelfKey]) structure[corridor][shelfKey] = {};
+      const rackKey = `Prateleira ${rack || '?'}`;
+      if (!structure[corridor][shelfKey][rackKey]) structure[corridor][shelfKey][rackKey] = {};
+
+      const posKey = position || '?';
+      if (!structure[corridor][shelfKey][rackKey][posKey]) {
+        structure[corridor][shelfKey][rackKey][posKey] = [];
+      }
+      structure[corridor][shelfKey][rackKey][posKey].push(p);
+    });
+
+    /* Adicionar posições extras de A-D para cada prateleira (visual) */
+    return structure;
+  }
+
+  function renderMap() {
+    const structure = buildMapStructure();
+    const container = document.getElementById('map-container');
+
+    if (Object.keys(structure).length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-map"></i>
+          <h3>Nenhuma localização definida</h3>
+          <p>Cadastre produtos com localização para visualizar o mapa.</p>
+          <a href="estoque.html" class="btn btn-primary">Ir para Estoque</a>
+        </div>`;
+      return;
+    }
+
+    const corridors = Object.keys(structure).sort();
+    container.innerHTML = corridors.map(corridor => {
+      const shelves = Object.keys(structure[corridor]).sort();
+      const shelvesHtml = shelves.map(shelf => {
+        const racks = Object.keys(structure[corridor][shelf]).sort();
+        const racksHtml = racks.map(rack => {
+          const positions = structure[corridor][shelf][rack];
+          const allPositions = new Set([...Object.keys(positions), 'A', 'B', 'C', 'D']);
+          const sortedPos = [...allPositions].sort();
+
+          const posHtml = sortedPos.map(pos => {
+            const products = positions[pos] || [];
+            let cls = 'empty';
+            let icon = '<i class="fas fa-xmark" style="font-size:16px"></i>';
+            let title = `${corridor}-${shelf}-${rack}-${pos}\nVazio`;
+
+            if (products.length > 0) {
+              const level = Utils.stockLevel(products[0]);
+              cls = level === 'critical' ? 'empty' : level === 'low' ? 'low' : 'filled';
+              icon = products.length > 1
+                ? `<i class="fas fa-layer-group" style="font-size:12px"></i><span>${products.length}</span>`
+                : `<i class="fas fa-box" style="font-size:12px"></i>`;
+              const names = products.map(p => p.name).join(', ');
+              title = `${corridor}-${shelf}-${rack}-${pos}\n${names}\nQtd: ${products.map(p => p.quantity).join(', ')}`;
+            }
+
+            return `
+              <div class="map-position ${cls}"
+                   title="${Utils.esc(title)}"
+                   onclick="showPositionDetail('${corridor}','${shelf}','${rack}','${pos}')">
+                <span style="font-size:9px;font-weight:700;opacity:0.7">${Utils.esc(pos)}</span>
+                ${icon}
+              </div>
+            `;
+          }).join('');
+
+          return `
+            <div style="margin-bottom:10px">
+              <div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;padding-left:4px">${Utils.esc(rack)}</div>
+              <div class="map-positions">${posHtml}</div>
+            </div>`;
+        }).join('');
+
+        return `
+          <div class="map-shelf">
+            <div class="map-shelf-title"><i class="fas fa-grip-lines-vertical"></i> ${Utils.esc(shelf)}</div>
+            ${racksHtml}
+          </div>`;
+      }).join('');
+
+      const totalInCorridor = Object.values(structure[corridor])
+        .flatMap(s => Object.values(s))
+        .flatMap(r => Object.values(r))
+        .flat().length;
+
+      return `
+        <div class="map-corridor">
+          <div class="map-corridor-title">
+            <i class="fas fa-road"></i>
+            Corredor ${Utils.esc(corridor)}
+            <span class="badge badge-primary">${totalInCorridor} itens</span>
+          </div>
+          <div>${shelvesHtml}</div>
+        </div>`;
+    }).join('');
+
+    /* Sumário para config modal */
+    const totalProducts = DB.getProducts().filter(p => p.location?.corridor).length;
+    document.getElementById('map-summary').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div><i class="fas fa-road" style="width:20px;color:var(--color-accent)"></i> <strong>${corridors.length}</strong> Corredor(es): ${corridors.join(', ')}</div>
+        <div><i class="fas fa-boxes" style="width:20px;color:var(--color-primary-light)"></i> <strong>${totalProducts}</strong> Produto(s) mapeados</div>
+        <div><i class="fas fa-box" style="width:20px;color:var(--color-success)"></i> <strong>${DB.getProducts().filter(p => !p.location?.corridor).length}</strong> Produto(s) sem localização</div>
+      </div>`;
+  }
+
+  function showPositionDetail(corridor, shelf, rack, position) {
+    const products = DB.getProducts().filter(p =>
+      p.location?.corridor === corridor &&
+      p.location?.shelf === shelf.replace('Estante ', '') &&
+      p.location?.rack === rack.replace('Prateleira ', '') &&
+      p.location?.position === position
+    );
+
+    const title = `Corredor ${corridor} / ${shelf} / ${rack} / Posição ${position}`;
+    document.getElementById('pos-modal-title').textContent = title;
+
+    if (products.length === 0) {
+      document.getElementById('pos-modal-body').innerHTML = `
+        <div class="empty-state" style="padding:32px">
+          <i class="fas fa-box-open"></i>
+          <h3>Posição Vazia</h3>
+          <p>Nenhum produto armazenado nesta posição</p>
+        </div>`;
+      document.getElementById('pos-modal-footer').innerHTML = `
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-position')">Fechar</button>`;
+    } else {
+      document.getElementById('pos-modal-body').innerHTML = `
+        <div style="display:flex;flex-direction:column;gap:16px">
+          ${products.map((p, i) => `
+            <div style="background:var(--bg-secondary);border-radius:var(--border-radius);padding:14px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+                <div>
+                  <div style="font-weight:700;font-size:14px">${Utils.esc(p.name)}</div>
+                  <span class="product-code">${Utils.esc(p.code)}</span>
+                </div>
+                ${Utils.stockBadge(p)}
+              </div>
+              <div style="display:flex;gap:20px;font-size:13px;color:var(--text-secondary);margin-bottom:10px">
+                <span><i class="fas fa-layer-group" style="margin-right:4px"></i>${p.quantity} ${Utils.esc(p.unit || '')}</span>
+                <span><i class="fas fa-tag" style="margin-right:4px"></i>${Utils.esc(p.category || '')}</span>
+              </div>
+              <div id="pos-qr-${p.id}" style="display:inline-block;background:white;padding:8px;border-radius:4px"></div>
+            </div>
+          `).join('')}
+        </div>`;
+
+      setTimeout(() => {
+        products.forEach(p => Utils.generateQR(`pos-qr-${p.id}`, p.code, 100));
+      }, 50);
+
+      const footerBtns = products.map(p => `
+        <button class="btn btn-outline btn-sm" onclick="openMoveModal('${p.id}')">
+          <i class="fas fa-up-down-left-right"></i> Mover ${products.length > 1 ? Utils.esc(p.name.split(' ')[0]) : ''}
+        </button>
+      `).join('');
+
+      document.getElementById('pos-modal-footer').innerHTML = `
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-position')">Fechar</button>
+        ${footerBtns}`;
+    }
+
+    UI.openModal('modal-position');
+  }
+
+  function openMoveModal(productId) {
+    const p = DB.getProduct(productId);
+    if (!p) return;
+    currentMoveProductId = productId;
+    document.getElementById('move-product-name').textContent = p.name;
+    document.getElementById('move-product-id').value = productId;
+    document.getElementById('move-corridor').value = p.location?.corridor || '';
+    document.getElementById('move-shelf').value = p.location?.shelf || '';
+    document.getElementById('move-rack').value = p.location?.rack || '';
+    document.getElementById('move-pos').value = p.location?.position || '';
+    UI.closeModal('modal-position');
+    UI.openModal('modal-move');
+  }
+
+  function confirmMove() {
+    const productId = document.getElementById('move-product-id').value;
+    const p = DB.getProduct(productId);
+    if (!p) return;
+
+    const oldLoc = p.location ? `${p.location.corridor}-${p.location.shelf}-${p.location.rack}-${p.location.position}` : 'sem localização';
+
+    p.location = {
+      corridor: document.getElementById('move-corridor').value.trim().toUpperCase(),
+      shelf: document.getElementById('move-shelf').value.trim(),
+      rack: document.getElementById('move-rack').value.trim(),
+      position: document.getElementById('move-pos').value.trim().toUpperCase(),
+    };
+    DB.saveProduct(p);
+
+    const newLoc = `${p.location.corridor}-${p.location.shelf}-${p.location.rack}-${p.location.position}`;
+    DB.addLog('ACTION', session.userId, session.userName, `Moveu produto ${p.code} de ${oldLoc} para ${newLoc}`);
+
+    UI.closeModal('modal-move');
+    UI.notify(`Produto movido para ${newLoc}`, 'success');
+    renderMap();
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+

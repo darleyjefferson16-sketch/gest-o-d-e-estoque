@@ -1,0 +1,546 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel do Desenvolvedor - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Painel do Desenvolvedor</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2><i class="fas fa-code" style="color:var(--color-info);margin-right:8px"></i>Painel do Desenvolvedor</h2>
+          <p>Monitoramento, logs e ferramentas administrativas avançadas</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-ghost" onclick="refreshAll()"><i class="fas fa-arrows-rotate"></i> Atualizar</button>
+        </div>
+      </div>
+
+      <!-- SYSTEM STATS -->
+      <div class="stats-grid" id="sys-stats" style="margin-bottom:24px"></div>
+
+      <div class="grid-2" style="margin-bottom:24px">
+        <!-- STORAGE INFO -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-database" style="color:var(--color-info);margin-right:6px"></i>Armazenamento Local</span>
+            <button class="btn btn-ghost btn-sm" onclick="renderStorage()"><i class="fas fa-arrows-rotate"></i></button>
+          </div>
+          <div id="storage-info"></div>
+        </div>
+
+        <!-- BACKUP PANEL -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title"><i class="fas fa-cloud-arrow-down" style="color:var(--color-success);margin-right:6px"></i>Backups</span>
+            <button class="btn btn-primary btn-sm" onclick="createManualBackup()">
+              <i class="fas fa-floppy-disk"></i> Criar Backup
+            </button>
+          </div>
+          <div id="backup-list"></div>
+        </div>
+      </div>
+
+      <!-- LOGS -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-rectangle-list" style="color:var(--color-warning);margin-right:6px"></i>Logs do Sistema</span>
+          <div style="display:flex;gap:8px">
+            <select class="form-control" id="log-level-filter" onchange="renderLogs()" style="max-width:130px;padding:4px 8px">
+              <option value="">Todos os níveis</option>
+              <option value="ACTION">Ações</option>
+              <option value="INFO">Info</option>
+              <option value="WARN">Avisos</option>
+              <option value="ERROR">Erros</option>
+            </select>
+            <input type="text" id="log-search" class="form-control" placeholder="Filtrar logs..." oninput="renderLogs()" style="max-width:200px">
+            <button class="btn btn-ghost btn-sm" onclick="clearLogs()"><i class="fas fa-trash"></i> Limpar</button>
+          </div>
+        </div>
+        <div id="logs-container" style="max-height:400px;overflow-y:auto;background:var(--bg-secondary);border-radius:var(--border-radius);padding:12px"></div>
+        <div id="log-pagination"></div>
+      </div>
+
+      <!-- ADMIN TOOLS -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-screwdriver-wrench" style="color:var(--color-danger);margin-right:6px"></i>Ferramentas Administrativas</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+          <!-- Export -->
+          <div style="background:var(--bg-secondary);border-radius:var(--border-radius);padding:16px">
+            <div style="font-weight:600;margin-bottom:8px;font-size:13px"><i class="fas fa-download" style="margin-right:6px;color:var(--color-primary-light)"></i>Exportar Dados</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button class="btn btn-outline btn-sm w-100" onclick="exportAll('json')"><i class="fas fa-file-code"></i> Exportar JSON Completo</button>
+              <button class="btn btn-outline btn-sm w-100" onclick="exportAll('csv-products')"><i class="fas fa-table"></i> Produtos CSV</button>
+              <button class="btn btn-outline btn-sm w-100" onclick="exportAll('csv-movements')"><i class="fas fa-table"></i> Movimentações CSV</button>
+              <button class="btn btn-outline btn-sm w-100" onclick="exportAll('csv-reqs')"><i class="fas fa-table"></i> Requisições CSV</button>
+            </div>
+          </div>
+
+          <!-- Import -->
+          <div style="background:var(--bg-secondary);border-radius:var(--border-radius);padding:16px">
+            <div style="font-weight:600;margin-bottom:8px;font-size:13px"><i class="fas fa-upload" style="margin-right:6px;color:var(--color-warning)"></i>Importar Dados</div>
+            <p style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Importe um backup JSON anteriormente exportado.</p>
+            <input type="file" id="import-file" accept=".json" class="form-control" style="margin-bottom:8px">
+            <button class="btn btn-warning btn-sm w-100" onclick="importData()"><i class="fas fa-file-import"></i> Importar JSON</button>
+          </div>
+
+          <!-- Danger Zone -->
+          <div style="background:var(--color-danger-bg);border:1px solid rgba(239,68,68,0.2);border-radius:var(--border-radius);padding:16px">
+            <div style="font-weight:600;margin-bottom:8px;font-size:13px;color:var(--color-danger)"><i class="fas fa-triangle-exclamation" style="margin-right:6px"></i>Zona de Risco</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <button class="btn btn-ghost btn-sm w-100" style="color:var(--color-warning);border-color:var(--color-warning)" onclick="clearHistory()">
+                <i class="fas fa-eraser"></i> Limpar Histórico
+              </button>
+              <button class="btn btn-ghost btn-sm w-100" style="color:var(--color-warning);border-color:var(--color-warning)" onclick="clearLogs()">
+                <i class="fas fa-eraser"></i> Limpar Logs
+              </button>
+              <button class="btn btn-danger btn-sm w-100" onclick="resetDatabase()">
+                <i class="fas fa-database"></i> Resetar Banco de Dados
+              </button>
+            </div>
+          </div>
+
+          <!-- Create Admin -->
+          <div style="background:var(--bg-secondary);border-radius:var(--border-radius);padding:16px">
+            <div style="font-weight:600;margin-bottom:8px;font-size:13px"><i class="fas fa-user-plus" style="margin-right:6px;color:var(--color-success)"></i>Criar Usuário Admin</div>
+            <div class="form-group">
+              <input type="text" id="quick-admin-name" class="form-control" placeholder="Nome do Admin">
+            </div>
+            <div class="form-group">
+              <input type="email" id="quick-admin-email" class="form-control" placeholder="email@empresa.com">
+            </div>
+            <div class="form-group">
+              <input type="password" id="quick-admin-pass" class="form-control" placeholder="Senha">
+            </div>
+            <button class="btn btn-success btn-sm w-100" onclick="createAdminUser()">
+              <i class="fas fa-plus"></i> Criar Administrador
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- SETTINGS -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title"><i class="fas fa-cog" style="color:var(--text-muted);margin-right:6px"></i>Configurações do Sistema</span>
+          <button class="btn btn-primary btn-sm" onclick="saveSettings()"><i class="fas fa-floppy-disk"></i> Salvar</button>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Nome da Empresa</label>
+            <input type="text" id="setting-company" class="form-control" placeholder="Nome da empresa">
+          </div>
+          <div class="form-group">
+            <label>Intervalo de Backup Automático (minutos)</label>
+            <input type="number" id="setting-backup-interval" class="form-control" min="5" max="1440">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Categorias de Produtos (separadas por vírgula)</label>
+          <textarea id="setting-categories" class="form-control" rows="3"></textarea>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+  let logPage = 1;
+
+  DB.init().then(async () => {
+    session = Auth.requireRole('Desenvolvedor');
+    if (session) {
+      UI.init('desenvolvedor');
+      DB.addLog('INFO', session.userId, session.userName, 'Acessou Painel do Desenvolvedor');
+      refreshAll();
+      loadSettings();
+    }
+  });
+
+  function refreshAll() {
+    renderSysStats();
+    renderStorage();
+    renderBackups();
+    renderLogs();
+  }
+
+  function renderSysStats() {
+    const products = DB.getProducts();
+    const users = DB.getUsers();
+    const movements = DB.getMovements();
+    const reqs = DB.getRequisitions();
+    const tools = DB.getTools();
+    const logs = DB.getLogs();
+    const backups = DB.getBackups();
+
+    document.getElementById('sys-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-users"></i></div><div class="stat-info"><div class="stat-value">${users.length}</div><div class="stat-label">Usuários</div></div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-boxes"></i></div><div class="stat-info"><div class="stat-value">${products.length}</div><div class="stat-label">Produtos</div></div></div>
+      <div class="stat-card"><div class="stat-icon cyan"><i class="fas fa-right-left"></i></div><div class="stat-info"><div class="stat-value">${movements.length.toLocaleString()}</div><div class="stat-label">Movimentações</div></div></div>
+      <div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-clipboard-list"></i></div><div class="stat-info"><div class="stat-value">${reqs.length}</div><div class="stat-label">Requisições</div></div></div>
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-wrench"></i></div><div class="stat-info"><div class="stat-value">${tools.length}</div><div class="stat-label">Ferramentas</div></div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-file-lines"></i></div><div class="stat-info"><div class="stat-value">${logs.length.toLocaleString()}</div><div class="stat-label">Logs</div></div></div>
+      <div class="stat-card"><div class="stat-icon cyan"><i class="fas fa-cloud"></i></div><div class="stat-info"><div class="stat-value">${backups.length}</div><div class="stat-label">Backups</div></div></div>
+    `;
+  }
+
+  function renderStorage() {
+    const keys = Object.keys(DB.KEYS).map(k => DB.KEYS[k]);
+    const totalSize = keys.reduce((s, k) => {
+      const item = localStorage.getItem(k);
+      return s + (item ? item.length * 2 : 0);
+    }, 0);
+
+    const rows = keys.map(k => {
+      const item = localStorage.getItem(k) || '';
+      const size = item.length * 2;
+      const pct = totalSize > 0 ? ((size / totalSize) * 100).toFixed(1) : 0;
+      let count = '';
+      try {
+        const data = JSON.parse(item);
+        if (Array.isArray(data)) count = `${data.length} registros`;
+        else if (typeof data === 'object') count = 'objeto';
+      } catch {}
+
+      return `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-color);font-size:12.5px">
+          <span style="color:var(--color-accent);font-family:monospace">${k.replace('ce_','')}</span>
+          <span style="color:var(--text-muted)">${count}</span>
+          <span style="color:var(--text-secondary)">${Utils.formatFileSize(size)}</span>
+        </div>`;
+    }).join('');
+
+    document.getElementById('storage-info').innerHTML = `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span style="font-size:12px;color:var(--text-muted)">Total utilizado</span>
+          <span style="font-size:12px;font-weight:700">${Utils.formatFileSize(totalSize)}</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${Math.min(100, (totalSize/(5*1024*1024))*100).toFixed(1)}%"></div></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px">Limite estimado: 5 MB (localStorage)</div>
+      </div>
+      ${rows}`;
+  }
+
+  function renderBackups() {
+    const backups = DB.getBackups();
+    const settings = DB.getSettings();
+
+    const listEl = document.getElementById('backup-list');
+
+    if (backups.length === 0) {
+      listEl.innerHTML = `<div class="empty-state" style="padding:24px"><i class="fas fa-cloud" style="font-size:32px"></i><p>Nenhum backup criado</p></div>`;
+      return;
+    }
+
+    listEl.innerHTML = `
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        Último backup: ${settings.lastBackup ? Utils.formatDateTime(settings.lastBackup) : 'nunca'} ·
+        Total: ${backups.length} backups
+      </div>
+      ${backups.slice(0, 5).map(b => `
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-color)">
+          <div style="flex:1">
+            <div style="font-size:12.5px;font-weight:600">${Utils.formatDateTime(b.createdAt)}</div>
+            <div style="font-size:11px;color:var(--text-muted)">
+              ${Utils.formatFileSize(b.size)} ·
+              ${b.records?.products || 0} produtos ·
+              ${b.records?.movements || 0} movimentações ·
+              <span class="badge badge-muted">${b.triggeredBy}</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-outline btn-sm btn-icon" onclick="downloadBackup('${b.id}')" data-tooltip="Baixar"><i class="fas fa-download"></i></button>
+            <button class="btn btn-warning btn-sm btn-icon" onclick="restoreBackup('${b.id}')" data-tooltip="Restaurar"><i class="fas fa-rotate-left"></i></button>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="deleteBackup('${b.id}')" data-tooltip="Excluir"><i class="fas fa-trash"></i></button>
+          </div>
+        </div>
+      `).join('')}
+    `;
+  }
+
+  let logPageSize = 100;
+
+  function renderLogs() {
+    const q = (document.getElementById('log-search').value || '').toLowerCase();
+    const level = document.getElementById('log-level-filter').value;
+
+    const logs = DB.getLogs().filter(l => {
+      if (level && l.level !== level) return false;
+      if (q && !l.action.toLowerCase().includes(q) && !l.userName.toLowerCase().includes(q)) return false;
+      return true;
+    });
+
+    const container = document.getElementById('logs-container');
+
+    if (logs.length === 0) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-muted);padding:20px">Nenhum log encontrado</div>';
+      return;
+    }
+
+    container.innerHTML = logs.slice(0, logPageSize).map(l => `
+      <div class="log-entry">
+        <span class="log-level ${l.level}">${l.level}</span>
+        <span class="log-time">${Utils.formatDateTime(l.createdAt)}</span>
+        <span class="log-user">${Utils.esc(l.userName)}</span>
+        <span class="log-action">${Utils.esc(l.action)}</span>
+      </div>
+    `).join('');
+
+    if (logs.length > logPageSize) {
+      container.innerHTML += `<div style="text-align:center;padding:12px">
+        <button class="btn btn-ghost btn-sm" onclick="logPageSize+=100;renderLogs()">
+          Carregar mais (${logs.length - logPageSize} restantes)
+        </button>
+      </div>`;
+    }
+  }
+
+  function createManualBackup() {
+    const backup = DB.createBackup(session.userName);
+    UI.notify(`Backup criado! ${Utils.formatFileSize(backup.size)}`, 'success');
+    renderBackups();
+  }
+
+  function downloadBackup(id) {
+    const backup = DB.getBackups().find(b => b.id === id);
+    if (!backup) return;
+    Utils.downloadJSON(backup.data, `backup_${backup.createdAt.split('T')[0]}.json`);
+    UI.notify('Backup baixado!', 'success');
+  }
+
+  async function restoreBackup(id) {
+    const ok = await UI.confirm('Restaurar este backup? Os dados atuais serão substituídos.', 'Restaurar Backup');
+    if (!ok) return;
+    const success = DB.restoreBackup(id);
+    if (success) {
+      DB.addLog('ACTION', session.userId, session.userName, 'Restaurou backup');
+      UI.notify('Backup restaurado com sucesso! Recarregando...', 'success');
+      setTimeout(() => window.location.reload(), 1500);
+    } else {
+      UI.notify('Erro ao restaurar backup', 'error');
+    }
+  }
+
+  async function deleteBackup(id) {
+    const ok = await UI.confirm('Excluir este backup permanentemente?');
+    if (!ok) return;
+    DB.deleteBackup(id);
+    UI.notify('Backup excluído!', 'success');
+    renderBackups();
+  }
+
+  function exportAll(type) {
+    const date = new Date().toISOString().split('T')[0];
+    if (type === 'json') {
+      Utils.downloadJSON(DB.exportJSON(), `dados_completos_${date}.json`);
+      UI.notify('Exportado em JSON!', 'success');
+    } else if (type === 'csv-products') {
+      Utils.downloadCSV(DB.exportCSV('products'), `produtos_${date}.csv`);
+      UI.notify('Produtos exportados em CSV!', 'success');
+    } else if (type === 'csv-movements') {
+      Utils.downloadCSV(DB.exportCSV('movements'), `movimentacoes_${date}.csv`);
+      UI.notify('Movimentações exportadas!', 'success');
+    } else if (type === 'csv-reqs') {
+      Utils.downloadCSV(DB.exportCSV('requisitions'), `requisicoes_${date}.csv`);
+      UI.notify('Requisições exportadas!', 'success');
+    }
+    DB.addLog('ACTION', session.userId, session.userName, `Exportou dados: ${type}`);
+  }
+
+  async function importData() {
+    const file = document.getElementById('import-file').files[0];
+    if (!file) { UI.notify('Selecione um arquivo JSON', 'warning'); return; }
+
+    const ok = await UI.confirm('Importar dados? Os dados serão MESCLADOS com os atuais.', 'Importar Dados');
+    if (!ok) return;
+
+    try {
+      const data = await Utils.importJSON(file);
+
+      const isArray = (v) => Array.isArray(v);
+      const validRoles = ['Administrador', 'Usuário', 'Almoxarife', 'Desenvolvedor'];
+      const errors = [];
+
+      if (data.users !== undefined) {
+        if (!isArray(data.users)) errors.push('users deve ser um array');
+        else {
+          data.users.forEach((u, i) => {
+            if (!u.id || !u.name || !u.email) errors.push(`users[${i}]: id, name e email são obrigatórios`);
+            if (u.role && !validRoles.includes(u.role)) errors.push(`users[${i}]: role inválido "${u.role}"`);
+          });
+        }
+      }
+      if (data.products !== undefined && !isArray(data.products)) errors.push('products deve ser um array');
+      if (data.entries !== undefined && !isArray(data.entries)) errors.push('entries deve ser um array');
+      if (data.exits !== undefined && !isArray(data.exits)) errors.push('exits deve ser um array');
+      if (data.requisitions !== undefined && !isArray(data.requisitions)) errors.push('requisitions deve ser um array');
+      if (data.tools !== undefined && !isArray(data.tools)) errors.push('tools deve ser um array');
+      if (data.movements !== undefined && !isArray(data.movements)) errors.push('movements deve ser um array');
+
+      if (errors.length > 0) {
+        UI.notify('Erros de validação:\n' + errors.join('\n'), 'error');
+        return;
+      }
+
+      if (data.users) {
+        const currentUserId = session.userId;
+        const currentUsers = DB.get(DB.KEYS.USERS) || [];
+        const currentUser = currentUsers.find(u => u.id === currentUserId);
+        let importedUsers = data.users;
+        if (currentUser && !importedUsers.find(u => u.id === currentUserId)) {
+          importedUsers = [currentUser, ...importedUsers];
+        }
+        DB.set(DB.KEYS.USERS, importedUsers);
+      }
+      if (data.products) DB.set(DB.KEYS.PRODUCTS, data.products);
+      if (data.entries) DB.set(DB.KEYS.ENTRIES, data.entries);
+      if (data.exits) DB.set(DB.KEYS.EXITS, data.exits);
+      if (data.requisitions) DB.set(DB.KEYS.REQUISITIONS, data.requisitions);
+      if (data.tools) DB.set(DB.KEYS.TOOLS, data.tools);
+      if (data.movements) DB.set(DB.KEYS.MOVEMENTS, data.movements);
+
+      DB.addLog('ACTION', session.userId, session.userName, `Importou dados do arquivo ${file.name}`);
+      UI.notify('Dados importados com sucesso! Recarregando...', 'success');
+      setTimeout(() => window.location.reload(), 1500);
+    } catch (e) {
+      UI.notify('Erro ao importar: ' + e.message, 'error');
+    }
+  }
+
+  async function clearHistory() {
+    const ok = await UI.confirm('Limpar todo o histórico de movimentações? Esta ação não pode ser desfeita.', 'Limpar Histórico');
+    if (!ok) return;
+    DB.createBackup(`${session.userName} (antes de limpar histórico)`);
+    DB.set(DB.KEYS.MOVEMENTS, []);
+    DB.addLog('WARN', session.userId, session.userName, 'Histórico de movimentações limpo');
+    UI.notify('Histórico limpo! Um backup foi criado.', 'success');
+    refreshAll();
+  }
+
+  async function clearLogs() {
+    const ok = await UI.confirm('Limpar todos os logs do sistema?', 'Limpar Logs');
+    if (!ok) return;
+    DB.set(DB.KEYS.LOGS, []);
+    renderLogs();
+    UI.notify('Logs limpos!', 'success');
+  }
+
+  async function resetDatabase() {
+    const ok = await UI.confirm('RESETAR TODO O BANCO DE DADOS? Todos os dados serão apagados e o sistema voltará ao estado inicial. Um backup será criado automaticamente.', 'RESET COMPLETO');
+    if (!ok) return;
+    const ok2 = await UI.confirm('Tem CERTEZA? Esta ação é IRREVERSÍVEL.', 'Confirme o Reset');
+    if (!ok2) return;
+
+    const backupResult = DB.createBackup(`${session.userName} (antes do reset)`);
+    if (!backupResult) {
+      UI.notify('Falha ao criar backup antes do reset. Operação cancelada para proteger os dados.', 'error');
+      return;
+    }
+
+    Object.values(DB.KEYS).forEach(k => {
+      if (k !== DB.KEYS.SESSION) localStorage.removeItem(k);
+    });
+
+    DB.addLog('ERROR', session.userId, session.userName, 'BANCO DE DADOS RESETADO');
+    UI.notify('Banco resetado! Recarregando...', 'warning');
+    setTimeout(() => window.location.href = 'login.html', 2000);
+  }
+
+  function createAdminUser() {
+    const name = document.getElementById('quick-admin-name').value.trim();
+    const email = document.getElementById('quick-admin-email').value.trim().toLowerCase();
+    const password = document.getElementById('quick-admin-pass').value;
+
+    if (!name || !email || !password) { UI.notify('Preencha todos os campos', 'warning'); return; }
+    if (password.length < 6) { UI.notify('Senha mínima de 6 caracteres', 'warning'); return; }
+    if (DB.getUserByEmail(email)) { UI.notify('Email já cadastrado', 'error'); return; }
+
+    const user = {
+      id: DB._uuid(),
+      name, email,
+      password: DB._hash(password),
+      role: 'Administrador',
+      sector: 'Administração',
+      position: 'Administrador',
+      active: true,
+      createdAt: new Date().toISOString(),
+      createdBy: session.userId,
+      lastLogin: null,
+    };
+    DB.saveUser(user);
+    DB.addLog('ACTION', session.userId, session.userName, `Criou usuário administrador: ${name}`);
+
+    document.getElementById('quick-admin-name').value = '';
+    document.getElementById('quick-admin-email').value = '';
+    document.getElementById('quick-admin-pass').value = '';
+
+    UI.notify(`Administrador ${name} criado com sucesso!`, 'success');
+    renderSysStats();
+  }
+
+  function loadSettings() {
+    const settings = DB.getSettings();
+    document.getElementById('setting-company').value = settings.companyName || '';
+    document.getElementById('setting-backup-interval').value = settings.backupInterval || 30;
+    document.getElementById('setting-categories').value = (settings.categories || []).join(', ');
+  }
+
+  function saveSettings() {
+    const settings = DB.getSettings();
+    settings.companyName = document.getElementById('setting-company').value.trim();
+    settings.backupInterval = parseInt(document.getElementById('setting-backup-interval').value) || 30;
+    settings.categories = document.getElementById('setting-categories').value
+      .split(',').map(c => c.trim()).filter(Boolean);
+    DB.set(DB.KEYS.SETTINGS, settings);
+    DB.addLog('ACTION', session.userId, session.userName, 'Atualizou configurações do sistema');
+    UI.notify('Configurações salvas!', 'success');
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+

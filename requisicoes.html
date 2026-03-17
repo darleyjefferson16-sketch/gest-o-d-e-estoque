@@ -1,0 +1,731 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Requisições - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Requisições</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2>Requisições de Materiais</h2>
+          <p>Solicite, acompanhe e atenda requisições de materiais</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-ghost" onclick="UI.openModal('modal-scanner')"><i class="fas fa-qrcode"></i> Escanear QR</button>
+          <button class="btn btn-primary" onclick="openNewReqModal()"><i class="fas fa-plus"></i> Nova Requisição</button>
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="tab-list" onclick="switchTab('list')">
+          <i class="fas fa-list"></i> Lista de Requisições
+        </button>
+        <button class="tab-btn" data-tab="tab-attend" onclick="switchTab('attend')">
+          <i class="fas fa-clipboard-check"></i> Atender Requisição
+        </button>
+      </div>
+
+      <!-- TAB: LISTA -->
+      <div id="tab-list">
+        <div class="filters-bar">
+          <div class="search-input" style="position:relative;flex:1;max-width:300px">
+            <i class="fas fa-search"></i>
+            <input type="text" id="search-reqs" class="form-control" placeholder="Buscar por código ou solicitante..." oninput="renderReqList()">
+          </div>
+          <select class="form-control" id="filter-req-status" onchange="renderReqList()" style="max-width:160px">
+            <option value="">Todos os status</option>
+            <option value="pendente">Pendente</option>
+            <option value="em_atendimento">Em Atendimento</option>
+            <option value="concluida">Concluída</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Solicitante</th>
+                  <th>Setor</th>
+                  <th>Data</th>
+                  <th>Itens</th>
+                  <th>Status</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody id="reqs-tbody"></tbody>
+            </table>
+          </div>
+          <div id="req-pagination"></div>
+        </div>
+      </div>
+
+      <!-- TAB: ATENDER -->
+      <div id="tab-attend" style="display:none">
+        <div class="grid-2" style="align-items:start">
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Localizar Requisição</span>
+            </div>
+            <div class="form-group">
+              <label>Código da Requisição</label>
+              <div style="display:flex;gap:10px">
+                <input type="text" id="attend-code" class="form-control" placeholder="Ex: REQ-0001" style="text-transform:uppercase">
+                <button class="btn btn-primary" onclick="loadReqByCode()"><i class="fas fa-search"></i></button>
+              </div>
+            </div>
+            <div style="text-align:center;color:var(--text-muted);font-size:13px;margin:12px 0">ou</div>
+            <button class="btn btn-outline w-100" onclick="UI.openModal('modal-scanner')">
+              <i class="fas fa-camera"></i> Escanear QR Code da Requisição
+            </button>
+          </div>
+
+          <div id="attend-result" style="display:none">
+            <!-- Detalhes da requisição aparecem aqui -->
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: NOVA REQUISIÇÃO -->
+<div class="modal-overlay" id="modal-new-req">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Nova Requisição de Materiais</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-new-req')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Solicitante</label>
+          <input type="text" id="req-requester" class="form-control" readonly>
+        </div>
+        <div class="form-group">
+          <label>Setor</label>
+          <input type="text" id="req-sector" class="form-control" placeholder="Ex: Manutenção, TI...">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <textarea id="req-obs" class="form-control" placeholder="Finalidade, urgência..."></textarea>
+      </div>
+
+      <div style="background:var(--bg-secondary);border-radius:var(--border-radius);padding:16px">
+        <div style="font-weight:600;margin-bottom:12px">
+          <i class="fas fa-list" style="color:var(--color-accent);margin-right:6px"></i>
+          Itens da Requisição
+        </div>
+        <!-- ADD ITEM ROW -->
+        <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="add-item-row">
+          <div style="flex:1;min-width:200px;position:relative">
+            <input type="text" id="req-item-search" class="form-control" placeholder="Buscar produto...">
+            <div id="req-item-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--border-radius);z-index:200;max-height:180px;overflow-y:auto;box-shadow:var(--shadow)"></div>
+          </div>
+          <input type="number" id="req-item-qty" class="form-control" placeholder="Qtd" min="1" style="max-width:80px">
+          <button class="btn btn-primary" onclick="addReqItem()"><i class="fas fa-plus"></i> Adicionar</button>
+        </div>
+        <input type="hidden" id="req-item-id">
+
+        <!-- ITEMS TABLE -->
+        <div id="req-items-container">
+          <div id="req-items-empty" style="text-align:center;color:var(--text-muted);padding:20px;font-size:13px">
+            <i class="fas fa-inbox" style="font-size:30px;display:block;margin-bottom:8px;opacity:0.3"></i>
+            Nenhum item adicionado
+          </div>
+          <table id="req-items-table" style="display:none;width:100%">
+            <thead><tr><th>Produto</th><th>Disponível</th><th>Qtd. Solicitada</th><th></th></tr></thead>
+            <tbody id="req-items-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-new-req')">Cancelar</button>
+      <button class="btn btn-primary" onclick="submitRequisition()"><i class="fas fa-paper-plane"></i> Enviar Requisição</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: VER REQUISIÇÃO -->
+<div class="modal-overlay" id="modal-view-req">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="view-req-title">Requisição</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-view-req')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="view-req-body"></div>
+    <div class="modal-footer" id="view-req-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-req')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: QR SCANNER -->
+<div class="modal-overlay" id="modal-scanner">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">Escanear QR Code</span>
+      <button class="modal-close" onclick="closeScanner()"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">Aponte a câmera para o QR Code da requisição ou produto.</p>
+      <div id="qr-reader" style="width:100%"></div>
+      <div id="scanner-status" style="margin-top:10px;font-size:13px;color:var(--text-muted);text-align:center"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+  let reqItems = [];
+  let currentReqPage = 1;
+  const reqPerPage = 12;
+
+  DB.init().then(async () => {
+    session = Auth.requireAuth();
+    if (session) {
+      UI.init('requisicoes');
+      DB.addLog('INFO', session.userId, session.userName, 'Acessou Requisições');
+      renderReqList();
+      initReqItemSearch();
+    }
+  });
+
+  function switchTab(tab) {
+    document.getElementById('tab-list').style.display = tab === 'list' ? 'block' : 'none';
+    document.getElementById('tab-attend').style.display = tab === 'attend' ? 'block' : 'none';
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+      b.classList.toggle('active', (tab === 'list' && i === 0) || (tab === 'attend' && i === 1));
+    });
+  }
+
+  function renderReqList() {
+    const q = (document.getElementById('search-reqs').value || '').toLowerCase();
+    const statusFilter = document.getElementById('filter-req-status').value;
+
+    let reqs = DB.getRequisitions().filter(r => {
+      if (q && !r.code.toLowerCase().includes(q) && !r.requesterName.toLowerCase().includes(q)) return false;
+      if (statusFilter && r.status !== statusFilter) return false;
+      return true;
+    });
+
+    const paginated = UI.paginate(reqs, currentReqPage, reqPerPage);
+    const tbody = document.getElementById('reqs-tbody');
+
+    if (paginated.items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="table-empty"><i class="fas fa-clipboard-list"></i>Nenhuma requisição encontrada</td></tr>`;
+    } else {
+      tbody.innerHTML = paginated.items.map(r => `
+        <tr>
+          <td><span class="product-code">${Utils.esc(r.code)}</span></td>
+          <td style="font-weight:600">${Utils.esc(r.requesterName)}</td>
+          <td style="color:var(--text-muted)">${Utils.esc(r.sector || '-')}</td>
+          <td style="color:var(--text-muted);font-size:12px">${Utils.formatDate(r.createdAt)}</td>
+          <td><span class="badge badge-primary">${r.items ? r.items.length : 0} itens</span></td>
+          <td>${Utils.reqStatusBadge(r.status)}</td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-ghost btn-sm btn-icon" onclick="viewRequisition('${r.id}')" data-tooltip="Ver detalhes"><i class="fas fa-eye"></i></button>
+              ${r.status === 'pendente' ? `<button class="btn btn-primary btn-sm" onclick="attendRequisition('${r.id}')"><i class="fas fa-clipboard-check"></i> Atender</button>` : ''}
+              ${r.status === 'pendente' ? `<button class="btn btn-ghost btn-sm btn-icon" onclick="cancelReq('${r.id}')" data-tooltip="Cancelar"><i class="fas fa-ban"></i></button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    UI.renderPagination(document.getElementById('req-pagination'), currentReqPage, paginated.totalPages,
+      (p) => { currentReqPage = p; renderReqList(); }
+    );
+  }
+
+  /* === NOVA REQUISIÇÃO === */
+  function openNewReqModal() {
+    reqItems = [];
+    document.getElementById('req-requester').value = session.userName;
+    document.getElementById('req-sector').value = '';
+    document.getElementById('req-obs').value = '';
+    document.getElementById('req-item-search').value = '';
+    document.getElementById('req-item-qty').value = '';
+    document.getElementById('req-item-id').value = '';
+    renderReqItems();
+    UI.openModal('modal-new-req');
+  }
+
+  function initReqItemSearch() {
+    const input = document.getElementById('req-item-search');
+    const dropdown = document.getElementById('req-item-dropdown');
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      if (q.length < 1) { dropdown.style.display = 'none'; return; }
+
+      const matches = DB.getProducts().filter(p =>
+        p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+      ).slice(0, 8);
+
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px">Nenhum produto encontrado</div>';
+      } else {
+        dropdown.innerHTML = matches.map(p => `
+          <div onclick="selectReqItem('${p.id}')" style="padding:8px 14px;cursor:pointer;border-bottom:1px solid var(--border-color)" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
+            <div style="font-weight:600;font-size:13px">${Utils.esc(p.name)}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">${Utils.esc(p.code)} · Disponível: ${p.quantity}</div>
+          </div>
+        `).join('');
+      }
+      dropdown.style.display = 'block';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+  }
+
+  function selectReqItem(id) {
+    const p = DB.getProduct(id);
+    if (!p) return;
+    document.getElementById('req-item-id').value = id;
+    document.getElementById('req-item-search').value = `${p.name} (${p.code})`;
+    document.getElementById('req-item-qty').value = '1';
+    document.getElementById('req-item-dropdown').style.display = 'none';
+    document.getElementById('req-item-qty').focus();
+  }
+
+  function addReqItem() {
+    const productId = document.getElementById('req-item-id').value;
+    const qty = parseInt(document.getElementById('req-item-qty').value) || 0;
+
+    if (!productId) { UI.notify('Selecione um produto', 'warning'); return; }
+    if (qty <= 0) { UI.notify('Informe a quantidade', 'warning'); return; }
+
+    const product = DB.getProduct(productId);
+    if (!product) return;
+
+    /* Verificar se já existe */
+    const existing = reqItems.findIndex(i => i.productId === productId);
+    if (existing >= 0) {
+      reqItems[existing].quantity += qty;
+    } else {
+      reqItems.push({
+        productId,
+        productCode: product.code,
+        productName: product.name,
+        quantity: qty,
+        unit: product.unit,
+        available: product.quantity,
+      });
+    }
+
+    document.getElementById('req-item-search').value = '';
+    document.getElementById('req-item-qty').value = '';
+    document.getElementById('req-item-id').value = '';
+    renderReqItems();
+  }
+
+  function renderReqItems() {
+    const empty = document.getElementById('req-items-empty');
+    const table = document.getElementById('req-items-table');
+    const tbody = document.getElementById('req-items-tbody');
+
+    if (reqItems.length === 0) {
+      empty.style.display = 'block';
+      table.style.display = 'none';
+      return;
+    }
+
+    empty.style.display = 'none';
+    table.style.display = 'table';
+
+    tbody.innerHTML = reqItems.map((item, idx) => `
+      <tr>
+        <td>
+          <div style="font-weight:600;font-size:13px">${Utils.esc(item.productName)}</div>
+          <span class="product-code">${Utils.esc(item.productCode)}</span>
+        </td>
+        <td style="color:${item.available < item.quantity ? 'var(--color-warning)' : 'var(--color-success)'}">
+          ${item.available} ${Utils.esc(item.unit || '')}
+        </td>
+        <td>
+          <input type="number" class="form-control" style="max-width:80px" value="${item.quantity}" min="1"
+                 onchange="reqItems[${idx}].quantity=parseInt(this.value)||1;renderReqItems()">
+        </td>
+        <td>
+          <button class="btn btn-danger btn-sm btn-icon" onclick="reqItems.splice(${idx},1);renderReqItems()">
+            <i class="fas fa-trash"></i>
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function submitRequisition() {
+    if (reqItems.length === 0) {
+      UI.notify('Adicione ao menos um item à requisição', 'warning');
+      return;
+    }
+
+    const sector = document.getElementById('req-sector').value.trim();
+    const obs = document.getElementById('req-obs').value.trim();
+
+    const req = DB.createRequisition({
+      requesterId: session.userId,
+      requesterName: session.userName,
+      sector,
+      observation: obs,
+      items: reqItems.map(i => ({
+        productId: i.productId,
+        productCode: i.productCode,
+        productName: i.productName,
+        quantity: i.quantity,
+        unit: i.unit,
+        separated: false,
+        delivered: false,
+      })),
+    });
+
+    DB.addLog('ACTION', session.userId, session.userName, `Criou requisição ${req.code} com ${req.items.length} itens`);
+    UI.closeModal('modal-new-req');
+    UI.notify(`Requisição ${req.code} criada!`, 'success');
+    renderReqList();
+    UI.renderSidebar('requisicoes');
+
+    /* Mostrar confirmação com QR Code */
+    setTimeout(() => viewRequisition(req.id), 300);
+  }
+
+  /* === VER REQUISIÇÃO === */
+  function viewRequisition(id) {
+    const req = DB.getRequisition(id);
+    if (!req) return;
+
+    document.getElementById('view-req-title').textContent = `Requisição ${req.code}`;
+
+    const itemsHtml = req.items.map((item, i) => `
+      <tr>
+        <td>${Utils.esc(item.productName)}</td>
+        <td><span class="product-code">${Utils.esc(item.productCode)}</span></td>
+        <td style="font-weight:700">${item.quantity} ${Utils.esc(item.unit || '')}</td>
+        <td>
+          ${item.separated ? '<span class="badge badge-primary"><i class="fas fa-check"></i> Separado</span>' : '<span class="badge badge-muted">Pendente</span>'}
+        </td>
+        <td>
+          ${item.delivered ? '<span class="badge badge-success"><i class="fas fa-check"></i> Entregue</span>' : '<span class="badge badge-muted">-</span>'}
+        </td>
+      </tr>
+    `).join('');
+
+    document.getElementById('view-req-body').innerHTML = `
+      <div class="grid-2" style="margin-bottom:16px">
+        <div>
+          <div style="display:flex;flex-direction:column;gap:8px;font-size:13px">
+            <div><span style="color:var(--text-muted)">Código: </span><strong class="product-code">${Utils.esc(req.code)}</strong></div>
+            <div><span style="color:var(--text-muted)">Solicitante: </span><strong>${Utils.esc(req.requesterName)}</strong></div>
+            <div><span style="color:var(--text-muted)">Setor: </span>${Utils.esc(req.sector || '-')}</div>
+            <div><span style="color:var(--text-muted)">Data: </span>${Utils.formatDateTime(req.createdAt)}</div>
+            <div><span style="color:var(--text-muted)">Status: </span>${Utils.reqStatusBadge(req.status)}</div>
+            ${req.observation ? `<div><span style="color:var(--text-muted)">Obs: </span>${Utils.esc(req.observation)}</div>` : ''}
+            ${req.attendedBy ? `<div><span style="color:var(--text-muted)">Atendido por: </span>${Utils.esc(req.attendedByName || '')}</div>` : ''}
+          </div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">QR Code da Requisição</div>
+          <div id="req-qr-${req.id}" style="display:inline-block;background:white;padding:10px;border-radius:8px"></div>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Produto</th><th>Código</th><th>Quantidade</th><th>Separado</th><th>Entregue</th></tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+      </div>
+    `;
+
+    const footer = document.getElementById('view-req-footer');
+    if (req.status === 'pendente') {
+      footer.innerHTML = `
+        <button class="btn btn-ghost" onclick="UI.closeModal('modal-view-req')">Fechar</button>
+        <button class="btn btn-danger btn-sm" onclick="cancelReq('${req.id}');UI.closeModal('modal-view-req')">Cancelar Req.</button>
+        <button class="btn btn-primary" onclick="UI.closeModal('modal-view-req');attendRequisition('${req.id}')">
+          <i class="fas fa-clipboard-check"></i> Iniciar Atendimento
+        </button>`;
+    } else {
+      footer.innerHTML = `<button class="btn btn-ghost" onclick="UI.closeModal('modal-view-req')">Fechar</button>`;
+    }
+
+    UI.openModal('modal-view-req');
+    setTimeout(() => Utils.generateQR(`req-qr-${req.id}`, req.code, 110), 100);
+  }
+
+  /* === ATENDER REQUISIÇÃO === */
+  function attendRequisition(id) {
+    switchTab('attend');
+    document.getElementById('attend-code').value = (DB.getRequisition(id)?.code || '').toUpperCase();
+    loadReqToAttend(id);
+  }
+
+  function loadReqByCode() {
+    const code = document.getElementById('attend-code').value.trim().toUpperCase();
+    if (!code) return;
+    const req = DB.getRequisitionByCode(code);
+    if (!req) {
+      UI.notify(`Requisição ${code} não encontrada`, 'error');
+      return;
+    }
+    loadReqToAttend(req.id);
+  }
+
+  function loadReqToAttend(id) {
+    const req = DB.getRequisition(id);
+    if (!req) return;
+
+    if (req.status === 'concluida') {
+      UI.notify('Esta requisição já foi concluída', 'warning');
+    }
+
+    if (req.status === 'pendente') {
+      req.status = 'em_atendimento';
+      req.attendedBy = session.userId;
+      req.attendedByName = session.userName;
+      DB.saveRequisition(req);
+      DB.addLog('ACTION', session.userId, session.userName, `Iniciou atendimento da requisição ${req.code}`);
+    }
+
+    renderAttendPanel(req.id);
+    renderReqList();
+    UI.renderSidebar('requisicoes');
+  }
+
+  function renderAttendPanel(id) {
+    const req = DB.getRequisition(id);
+    if (!req) return;
+
+    const resultEl = document.getElementById('attend-result');
+    resultEl.style.display = 'block';
+
+    const allSeparated = req.items.every(i => i.separated);
+    const allDelivered = req.items.every(i => i.delivered);
+
+    resultEl.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">
+            <span class="product-code">${Utils.esc(req.code)}</span>
+            ${Utils.reqStatusBadge(req.status)}
+          </span>
+        </div>
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">
+          <span>Solicitante: <strong>${Utils.esc(req.requesterName)}</strong></span> ·
+          <span>Setor: ${Utils.esc(req.sector || '-')}</span> ·
+          <span>${Utils.formatDateTime(req.createdAt)}</span>
+        </div>
+
+        <div class="table-wrapper" style="margin-bottom:16px">
+          <table>
+            <thead><tr><th>Produto</th><th>Qtd.</th><th>Localização</th><th>Separado</th><th>Entregue</th></tr></thead>
+            <tbody>
+              ${req.items.map((item, i) => {
+                const product = DB.getProductByCode(item.productCode) || {};
+                const loc = product.location ? `${product.location.corridor}-${product.location.shelf}-${product.location.rack}-${product.location.position}` : '-';
+                return `
+                  <tr>
+                    <td>
+                      <div style="font-weight:600">${Utils.esc(item.productName)}</div>
+                      <span class="product-code">${Utils.esc(item.productCode)}</span>
+                    </td>
+                    <td style="font-weight:700">${item.quantity}</td>
+                    <td><span class="location-tag"><i class="fas fa-map-pin"></i>${Utils.esc(loc)}</span></td>
+                    <td>
+                      <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+                        <input type="checkbox" ${item.separated ? 'checked' : ''} onchange="toggleItemStatus('${id}',${i},'separated',this.checked)">
+                        <span style="font-size:12px">${item.separated ? 'Separado' : 'Separar'}</span>
+                      </label>
+                    </td>
+                    <td>
+                      <label style="cursor:pointer;display:flex;align-items:center;gap:6px">
+                        <input type="checkbox" ${item.delivered ? 'checked' : ''} ${!item.separated ? 'disabled' : ''} onchange="toggleItemStatus('${id}',${i},'delivered',this.checked)">
+                        <span style="font-size:12px">${item.delivered ? 'Entregue' : 'Entregar'}</span>
+                      </label>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+          ${!allDelivered && req.status !== 'concluida' ? `
+            <button class="btn btn-primary" onclick="markAllSeparated('${id}')">
+              <i class="fas fa-check-double"></i> Marcar Todos Separados
+            </button>
+            ${allSeparated ? `<button class="btn btn-success" onclick="finalizeRequisition('${id}')">
+              <i class="fas fa-check"></i> Finalizar Entrega
+            </button>` : ''}
+          ` : ''}
+          ${req.status === 'concluida' ? '<span class="badge badge-success" style="font-size:13px;padding:8px 12px"><i class="fas fa-check"></i> Requisição Concluída</span>' : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleItemStatus(reqId, itemIdx, field, value) {
+    const req = DB.getRequisition(reqId);
+    if (!req) return;
+    req.items[itemIdx][field] = value;
+    DB.saveRequisition(req);
+    renderAttendPanel(reqId);
+  }
+
+  function markAllSeparated(reqId) {
+    const req = DB.getRequisition(reqId);
+    if (!req) return;
+    req.items.forEach(i => i.separated = true);
+    DB.saveRequisition(req);
+    renderAttendPanel(reqId);
+  }
+
+  async function finalizeRequisition(reqId) {
+    const req = DB.getRequisition(reqId);
+    if (!req) return;
+    if (req.status === 'concluida') { UI.notify('Requisição já foi concluída.', 'warning'); return; }
+
+    const ok = await UI.confirm('Confirmar entrega de todos os itens? O estoque será atualizado automaticamente.', 'Finalizar Entrega');
+    if (!ok) return;
+
+    req.items.forEach(i => {
+      i.delivered = true;
+      const product = DB.getProductByCode(i.productCode);
+      if (product) {
+        DB.addExit({
+          productId: product.id,
+          productCode: product.code,
+          productName: product.name,
+          quantity: i.quantity,
+          date: new Date().toISOString(),
+          destination: `Req. ${req.code} - ${req.requesterName}`,
+          observation: `Requisição ${req.code}`,
+          userId: session.userId,
+          userName: session.userName,
+        });
+      }
+    });
+
+    req.status = 'concluida';
+    req.completedAt = new Date().toISOString();
+    req.deliveredBy = session.userId;
+    req.deliveredByName = session.userName;
+    DB.saveRequisition(req);
+    DB.addLog('ACTION', session.userId, session.userName, `Finalizou requisição ${req.code}`);
+
+    UI.notify(`Requisição ${req.code} concluída! Estoque atualizado.`, 'success');
+    renderAttendPanel(reqId);
+    renderReqList();
+    UI.renderSidebar('requisicoes');
+  }
+
+  async function cancelReq(id) {
+    const req = DB.getRequisition(id);
+    if (!req) return;
+    const ok = await UI.confirm(`Cancelar a requisição ${req.code}?`);
+    if (!ok) return;
+    req.status = 'cancelada';
+    DB.saveRequisition(req);
+    DB.addLog('ACTION', session.userId, session.userName, `Cancelou requisição ${req.code}`);
+    UI.notify('Requisição cancelada', 'warning');
+    renderReqList();
+    UI.renderSidebar('requisicoes');
+  }
+
+  /* === QR SCANNER === */
+  function closeScanner() {
+    Scanner.stop();
+    UI.closeModal('modal-scanner');
+  }
+
+  document.getElementById('modal-scanner').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeScanner();
+  });
+
+  /* Start scanner when modal opens */
+  const scannerObserver = new MutationObserver(() => {
+    const modal = document.getElementById('modal-scanner');
+    if (modal.classList.contains('active') && !Scanner.html5Qr) {
+      Scanner.start('qr-reader', (code) => {
+        document.getElementById('scanner-status').textContent = `Lido: ${code}`;
+        UI.closeModal('modal-scanner');
+
+        /* Check if it's a requisition */
+        if (code.startsWith('REQ-')) {
+          document.getElementById('attend-code').value = code;
+          switchTab('attend');
+          loadReqByCode();
+        } else {
+          /* Check if it's a product */
+          const product = DB.getProductByCode(code) || DB.getProducts().find(p => p.id === code);
+          if (product) {
+            UI.notify(`Produto: ${product.name} · Estoque: ${product.quantity}`, 'info', 6000);
+          }
+        }
+      });
+    } else if (!modal.classList.contains('active')) {
+      Scanner.stop();
+    }
+  });
+
+  scannerObserver.observe(document.getElementById('modal-scanner'), { attributes: true, attributeFilter: ['class'] });
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+

@@ -1,0 +1,184 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+
+<!-- LOGIN -->
+<div id="login-view" class="login-page">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon"><i class="fas fa-warehouse"></i></div>
+      <h1>Controle de Estoque</h1>
+      <p>Sistema de Gestão de Almoxarifado</p>
+    </div>
+
+    <div class="login-error" id="login-error"></div>
+    <div id="login-blocked" style="display:none"></div>
+
+    <div class="form-group">
+      <label>Email ou Usuário</label>
+      <input type="email" id="login-email" class="form-control" placeholder="seu@email.com" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>Senha</label>
+      <div class="password-input">
+        <input type="password" id="login-pass" class="form-control" placeholder="••••••••" autocomplete="current-password">
+        <button class="password-toggle" type="button" id="toggle-pass">
+          <i class="fas fa-eye"></i>
+        </button>
+      </div>
+      <div class="login-forgot"><a href="#" onclick="showForgot()">Esqueci minha senha</a></div>
+    </div>
+
+    <button class="btn btn-primary w-100 btn-lg" id="btn-login" onclick="doLogin()">
+      <i class="fas fa-right-to-bracket"></i> Entrar
+    </button>
+
+
+
+  </div>
+</div>
+
+<!-- RECUPERAÇÃO DE SENHA -->
+<div id="forgot-view" class="login-page" style="display:none">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-icon" style="background:var(--color-warning)">
+        <i class="fas fa-key"></i>
+      </div>
+      <h1>Recuperar Senha</h1>
+      <p>Solicite redefinição ao administrador</p>
+    </div>
+
+    <div style="background:var(--color-info-bg);border:1px solid rgba(6,182,212,0.3);border-radius:var(--border-radius);padding:14px;font-size:13px;color:var(--color-info);margin-bottom:20px;line-height:1.6">
+      <i class="fas fa-circle-info" style="margin-right:6px"></i>
+      Por segurança, a redefinição de senhas só pode ser realizada por um
+      <strong>administrador do sistema</strong> através da tela de
+      <strong>Gestão de Usuários</strong>.<br><br>
+      Entre em contato com o administrador informando seu email para solicitar o reset.
+    </div>
+
+    <div class="form-group">
+      <label>Seu email cadastrado</label>
+      <input type="email" id="forgot-email" class="form-control" placeholder="seu@email.com" readonly>
+    </div>
+
+    <div style="margin-top:8px;text-align:center">
+      <a href="#" onclick="showLogin()" style="color:var(--color-primary-light);font-size:13px;text-decoration:none">
+        <i class="fas fa-arrow-left"></i> Voltar ao Login
+      </a>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script>
+  (async () => {
+    await DB.init();
+
+    if (Auth.isAuthenticated()) {
+      window.location.href = 'dashboard.html';
+      return;
+    }
+
+    document.getElementById('toggle-pass').addEventListener('click', () => togglePass('login-pass'));
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && document.getElementById('login-view').style.display !== 'none') doLogin();
+    });
+  })();
+
+  function togglePass(inputId) {
+    const input = document.getElementById(inputId);
+    const btn = input.nextElementSibling || input.parentElement.querySelector('.password-toggle');
+    if (input.type === 'password') {
+      input.type = 'text';
+      if (btn) btn.innerHTML = '<i class="fas fa-eye-slash"></i>';
+    } else {
+      input.type = 'password';
+      if (btn) btn.innerHTML = '<i class="fas fa-eye"></i>';
+    }
+  }
+
+  async function doLogin() {
+    const email = document.getElementById('login-email').value.trim();
+    const pass = document.getElementById('login-pass').value;
+    const errEl = document.getElementById('login-error');
+    const blockedEl = document.getElementById('login-blocked');
+
+    errEl.style.display = 'none';
+    blockedEl.style.display = 'none';
+
+    if (!email || !pass) {
+      errEl.textContent = 'Preencha email e senha.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Entrando...';
+
+    const result = await Auth.login(email, pass);
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Entrar';
+
+    if (result.error) {
+      if (result.blocked) {
+        blockedEl.className = 'login-blocked';
+        blockedEl.innerHTML = `<i class="fas fa-lock"></i> ${result.error}`;
+        blockedEl.style.display = 'block';
+      } else {
+        errEl.textContent = result.error;
+        errEl.style.display = 'block';
+      }
+      return;
+    }
+
+    window.location.href = 'dashboard.html';
+  }
+
+  async function quickLogin(email, pass) {
+    document.getElementById('login-email').value = email;
+    document.getElementById('login-pass').value = pass;
+    await doLogin();
+  }
+
+  /* Forgot password — apenas informa o fluxo, sem reset automático */
+  function showForgot() {
+    const email = document.getElementById('login-email').value.trim();
+    document.getElementById('forgot-email').value = email;
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('forgot-view').style.display = 'flex';
+  }
+
+  function showLogin() {
+    document.getElementById('forgot-view').style.display = 'none';
+    document.getElementById('login-view').style.display = 'flex';
+  }
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+

@@ -1,0 +1,445 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ferramentas - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Controle de Ferramentas</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2>Controle de Ferramentas</h2>
+          <p>Gerencie empréstimos e devoluções de ferramentas</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-primary" onclick="openToolModal()"><i class="fas fa-plus"></i> Nova Ferramenta</button>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(160px,1fr));margin-bottom:20px" id="tool-stats"></div>
+
+      <!-- FILTERS -->
+      <div class="filters-bar" style="margin-bottom:20px">
+        <div class="search-input" style="position:relative;flex:1;max-width:300px">
+          <i class="fas fa-search"></i>
+          <input type="text" id="search-tools" class="form-control" placeholder="Buscar ferramentas..." oninput="renderTools()">
+        </div>
+        <select class="form-control" id="filter-tool-status" onchange="renderTools()" style="max-width:160px">
+          <option value="">Todos os status</option>
+          <option value="disponivel">Disponível</option>
+          <option value="emprestado">Emprestado</option>
+          <option value="manutencao">Manutenção</option>
+        </select>
+        <select class="form-control" id="filter-tool-category" onchange="renderTools()" style="max-width:180px">
+          <option value="">Todas as categorias</option>
+        </select>
+      </div>
+
+      <!-- TABLE -->
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Código</th>
+                <th>Ferramenta</th>
+                <th>Patrimônio</th>
+                <th>Categoria</th>
+                <th>Status</th>
+                <th>Responsável</th>
+                <th>Retirada</th>
+                <th>Devolução Prev.</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tools-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: FERRAMENTA -->
+<div class="modal-overlay" id="modal-tool">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="tool-modal-title">Nova Ferramenta</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-tool')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="tool-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Nome da Ferramenta *</label>
+          <input type="text" id="tool-name" class="form-control" placeholder="Ex: Furadeira de Impacto">
+        </div>
+        <div class="form-group">
+          <label>Número de Patrimônio</label>
+          <input type="text" id="tool-patrimony" class="form-control" placeholder="Ex: PAT-001">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Categoria</label>
+          <select id="tool-category" class="form-control">
+            <option value="Elétrica">Elétrica</option>
+            <option value="Medição">Medição</option>
+            <option value="Corte">Corte</option>
+            <option value="Aperto">Aperto</option>
+            <option value="Perfuração">Perfuração</option>
+            <option value="Outros">Outros</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status *</label>
+          <select id="tool-status" class="form-control" onchange="toggleBorrowFields()">
+            <option value="disponivel">Disponível</option>
+            <option value="emprestado">Emprestado</option>
+            <option value="manutencao">Manutenção</option>
+          </select>
+        </div>
+      </div>
+      <div id="borrow-fields" style="display:none;background:var(--bg-secondary);border-radius:var(--border-radius);padding:16px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:12px;color:var(--text-secondary)">
+          <i class="fas fa-user" style="margin-right:6px;color:var(--color-warning)"></i>Dados do Empréstimo
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Funcionário Responsável</label>
+            <input type="text" id="tool-borrower" class="form-control" placeholder="Nome do funcionário">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Setor / Departamento</label>
+            <input type="text" id="tool-borrower-sector" class="form-control" placeholder="Ex: Manutenção">
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group" style="margin-bottom:0">
+            <label>Data de Retirada</label>
+            <input type="date" id="tool-borrow-date" class="form-control">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Data Prevista de Devolução</label>
+            <input type="date" id="tool-return-date" class="form-control">
+          </div>
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:12px">
+        <label>Observação</label>
+        <textarea id="tool-obs" class="form-control" placeholder="Informações adicionais..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-tool')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveTool()"><i class="fas fa-floppy-disk"></i> Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: DEVOLUÇÃO -->
+<div class="modal-overlay" id="modal-devolution">
+  <div class="modal modal-sm">
+    <div class="modal-header">
+      <span class="modal-title">Registrar Devolução</span>
+      <button class="modal-close" onclick="UI.closeModal('modal-devolution')"><i class="fas fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="dev-tool-id">
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px">Ferramenta: <strong id="dev-tool-name"></strong></p>
+      <div class="form-group">
+        <label>Data de Devolução</label>
+        <input type="date" id="dev-date" class="form-control">
+      </div>
+      <div class="form-group">
+        <label>Condição na Devolução</label>
+        <select id="dev-condition" class="form-control">
+          <option value="disponivel">Boa condição - Disponível</option>
+          <option value="manutencao">Necessita manutenção</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Observação</label>
+        <textarea id="dev-obs" class="form-control" placeholder="Observações sobre a devolução..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="UI.closeModal('modal-devolution')">Cancelar</button>
+      <button class="btn btn-success" onclick="confirmDevolution()"><i class="fas fa-check"></i> Confirmar Devolução</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+
+  DB.init().then(() => {
+    session = Auth.denyUser();
+    if (!session) return;
+    UI.renderSidebar('ferramentas');
+    populateCategories();
+    renderStats();
+    renderTools();
+  });
+
+  function populateCategories() {
+    const categories = [...new Set(DB.getTools().map(t => t.category).filter(Boolean))];
+    const select = document.getElementById('filter-tool-category');
+    categories.forEach(c => {
+      select.innerHTML += `<option value="${Utils.esc(c)}">${Utils.esc(c)}</option>`;
+    });
+  }
+
+  function renderStats() {
+    const tools = DB.getTools();
+    const total = tools.length;
+    const available = tools.filter(t => t.status === 'disponivel').length;
+    const borrowed = tools.filter(t => t.status === 'emprestado').length;
+    const maintenance = tools.filter(t => t.status === 'manutencao').length;
+
+    const now = new Date();
+    const overdue = tools.filter(t => t.status === 'emprestado' && t.returnDate && new Date(t.returnDate) < now).length;
+
+    document.getElementById('tool-stats').innerHTML = `
+      <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-wrench"></i></div><div class="stat-info"><div class="stat-value">${total}</div><div class="stat-label">Total de Ferramentas</div></div></div>
+      <div class="stat-card"><div class="stat-icon green"><i class="fas fa-circle-check"></i></div><div class="stat-info"><div class="stat-value">${available}</div><div class="stat-label">Disponíveis</div></div></div>
+      <div class="stat-card"><div class="stat-icon yellow"><i class="fas fa-hand-holding"></i></div><div class="stat-info"><div class="stat-value">${borrowed}</div><div class="stat-label">Emprestadas</div></div></div>
+      <div class="stat-card"><div class="stat-icon red"><i class="fas fa-screwdriver-wrench"></i></div><div class="stat-info"><div class="stat-value">${maintenance}</div><div class="stat-label">Em Manutenção</div></div></div>
+      <div class="stat-card"><div class="stat-icon red"><i class="fas fa-triangle-exclamation"></i></div><div class="stat-info"><div class="stat-value">${overdue}</div><div class="stat-label">Atrasadas</div></div></div>
+    `;
+  }
+
+  function renderTools() {
+    const q = (document.getElementById('search-tools').value || '').toLowerCase();
+    const status = document.getElementById('filter-tool-status').value;
+    const category = document.getElementById('filter-tool-category').value;
+
+    const tools = DB.getTools().filter(t => {
+      if (q && !t.name.toLowerCase().includes(q) && !(t.code || '').toLowerCase().includes(q) && !(t.borrowedBy || '').toLowerCase().includes(q)) return false;
+      if (status && t.status !== status) return false;
+      if (category && t.category !== category) return false;
+      return true;
+    });
+
+    const tbody = document.getElementById('tools-tbody');
+    const now = new Date();
+
+    if (tools.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="9" class="table-empty"><i class="fas fa-wrench"></i>Nenhuma ferramenta encontrada</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = tools.map(t => {
+      const statusBadge = {
+        disponivel: '<span class="badge badge-success"><i class="fas fa-check"></i> Disponível</span>',
+        emprestado: '<span class="badge badge-warning"><i class="fas fa-hand-holding"></i> Emprestado</span>',
+        manutencao: '<span class="badge badge-danger"><i class="fas fa-screwdriver-wrench"></i> Manutenção</span>',
+      }[t.status] || `<span class="badge badge-muted">${Utils.esc(t.status)}</span>`;
+
+      const isOverdue = t.status === 'emprestado' && t.returnDate && new Date(t.returnDate) < now;
+
+      return `
+        <tr ${isOverdue ? 'style="background:rgba(239,68,68,0.05)"' : ''}>
+          <td><span class="product-code">${Utils.esc(t.code || '-')}</span></td>
+          <td>
+            <div style="font-weight:600">${Utils.esc(t.name)}</div>
+            ${isOverdue ? '<span class="badge badge-danger" style="font-size:10px">ATRASADA</span>' : ''}
+          </td>
+          <td style="color:var(--text-muted);font-size:12px">${Utils.esc(t.patrimony || '-')}</td>
+          <td><span class="badge badge-muted">${Utils.esc(t.category || '-')}</span></td>
+          <td>${statusBadge}</td>
+          <td style="color:var(--text-secondary)">${Utils.esc(t.borrowedBy || '-')}</td>
+          <td style="color:var(--text-muted);font-size:12px">${t.borrowedDate ? Utils.formatDate(t.borrowedDate) : '-'}</td>
+          <td style="color:${isOverdue ? 'var(--color-danger)' : 'var(--text-muted)'};font-size:12px;font-weight:${isOverdue ? '700' : '400'}">
+            ${t.returnDate ? Utils.formatDate(t.returnDate) : '-'}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-outline btn-sm btn-icon" onclick="openToolModal('${t.id}')" data-tooltip="Editar"><i class="fas fa-pen-to-square"></i></button>
+              ${t.status === 'emprestado' ? `<button class="btn btn-success btn-sm" onclick="openDevolutionModal('${t.id}')"><i class="fas fa-rotate-left"></i> Devolver</button>` : ''}
+              ${t.status === 'disponivel' ? `<button class="btn btn-warning btn-sm" onclick="openBorrowQuick('${t.id}')"><i class="fas fa-hand-holding"></i> Emprestar</button>` : ''}
+              <button class="btn btn-danger btn-sm btn-icon" onclick="deleteTool('${t.id}')" data-tooltip="Excluir"><i class="fas fa-trash"></i></button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function toggleBorrowFields() {
+    const status = document.getElementById('tool-status').value;
+    document.getElementById('borrow-fields').style.display = status === 'emprestado' ? 'block' : 'none';
+  }
+
+  function openToolModal(id) {
+    if (id) {
+      const t = DB.getTool(id);
+      if (!t) return;
+      document.getElementById('tool-modal-title').textContent = 'Editar Ferramenta';
+      document.getElementById('tool-id').value = t.id;
+      document.getElementById('tool-name').value = t.name;
+      document.getElementById('tool-patrimony').value = t.patrimony || '';
+      document.getElementById('tool-category').value = t.category || 'Outros';
+      document.getElementById('tool-status').value = t.status;
+      document.getElementById('tool-borrower').value = t.borrowedBy || '';
+      document.getElementById('tool-borrower-sector').value = t.borrowerSector || '';
+      document.getElementById('tool-borrow-date').value = t.borrowedDate ? t.borrowedDate.split('T')[0] : '';
+      document.getElementById('tool-return-date').value = t.returnDate ? t.returnDate.split('T')[0] : '';
+      document.getElementById('tool-obs').value = t.observation || '';
+    } else {
+      document.getElementById('tool-modal-title').textContent = 'Nova Ferramenta';
+      document.getElementById('tool-id').value = '';
+      document.getElementById('tool-name').value = '';
+      document.getElementById('tool-patrimony').value = '';
+      document.getElementById('tool-category').value = 'Outros';
+      document.getElementById('tool-status').value = 'disponivel';
+      document.getElementById('tool-borrower').value = '';
+      document.getElementById('tool-borrower-sector').value = '';
+      document.getElementById('tool-borrow-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('tool-return-date').value = '';
+      document.getElementById('tool-obs').value = '';
+    }
+    toggleBorrowFields();
+    UI.openModal('modal-tool');
+  }
+
+  function openBorrowQuick(id) {
+    const t = DB.getTool(id);
+    if (!t) return;
+    document.getElementById('tool-id').value = t.id;
+    document.getElementById('tool-name').value = t.name;
+    document.getElementById('tool-patrimony').value = t.patrimony || '';
+    document.getElementById('tool-category').value = t.category || 'Outros';
+    document.getElementById('tool-status').value = 'emprestado';
+    document.getElementById('tool-borrower').value = '';
+    document.getElementById('tool-borrow-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('tool-return-date').value = '';
+    document.getElementById('tool-obs').value = '';
+    toggleBorrowFields();
+    UI.openModal('modal-tool');
+  }
+
+  function saveTool() {
+    const id = document.getElementById('tool-id').value;
+    const name = document.getElementById('tool-name').value.trim();
+    const status = document.getElementById('tool-status').value;
+
+    if (!name) { UI.notify('Informe o nome da ferramenta', 'warning'); return; }
+
+    const existing = id ? DB.getTool(id) : {};
+    const tool = {
+      ...(existing || {}),
+      id: id || DB._uuid(),
+      name,
+      patrimony: document.getElementById('tool-patrimony').value.trim(),
+      category: document.getElementById('tool-category').value,
+      status,
+      borrowedBy: status === 'emprestado' ? document.getElementById('tool-borrower').value.trim() : null,
+      borrowerSector: status === 'emprestado' ? document.getElementById('tool-borrower-sector').value.trim() : null,
+      borrowedDate: status === 'emprestado' ? (document.getElementById('tool-borrow-date').value || new Date().toISOString().split('T')[0]) : null,
+      returnDate: status === 'emprestado' ? document.getElementById('tool-return-date').value || null : null,
+      observation: document.getElementById('tool-obs').value.trim(),
+      createdAt: existing?.createdAt || new Date().toISOString(),
+    };
+
+    if (!id) tool.code = DB._toolCode();
+    else tool.code = existing.code || DB._toolCode();
+
+    DB.saveTool(tool);
+    DB.addLog('ACTION', session.userId, session.userName, `${id ? 'Editou' : 'Cadastrou'} ferramenta: ${name} (${status})`);
+    UI.closeModal('modal-tool');
+    UI.notify(`Ferramenta ${id ? 'atualizada' : 'cadastrada'}!`, 'success');
+    renderStats();
+    renderTools();
+  }
+
+  function openDevolutionModal(id) {
+    const t = DB.getTool(id);
+    if (!t) return;
+    document.getElementById('dev-tool-id').value = id;
+    document.getElementById('dev-tool-name').textContent = t.name;
+    document.getElementById('dev-date').value = new Date().toISOString().split('T')[0];
+    document.getElementById('dev-obs').value = '';
+    UI.openModal('modal-devolution');
+  }
+
+  function confirmDevolution() {
+    const id = document.getElementById('dev-tool-id').value;
+    const t = DB.getTool(id);
+    if (!t) return;
+
+    const prevBorrower = t.borrowedBy;
+    t.status = document.getElementById('dev-condition').value;
+    t.devolutionDate = document.getElementById('dev-date').value;
+    t.devolutionObs = document.getElementById('dev-obs').value;
+    t.borrowedBy = null;
+    t.borrowerSector = null;
+    t.borrowedDate = null;
+    t.returnDate = null;
+
+    DB.saveTool(t);
+    DB.addLog('ACTION', session.userId, session.userName, `Devolução da ferramenta ${t.name} por ${prevBorrower}`);
+    UI.closeModal('modal-devolution');
+    UI.notify(`Devolução de ${t.name} registrada!`, 'success');
+    renderStats();
+    renderTools();
+  }
+
+  async function deleteTool(id) {
+    const t = DB.getTool(id);
+    if (!t) return;
+    const ok = await UI.confirm(`Excluir a ferramenta "${t.name}"?`, 'Excluir Ferramenta');
+    if (!ok) return;
+    DB.deleteTool(id);
+    DB.addLog('ACTION', session.userId, session.userName, `Excluiu ferramenta: ${t.name}`);
+    UI.notify('Ferramenta excluída!', 'success');
+    renderStats();
+    renderTools();
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+
+

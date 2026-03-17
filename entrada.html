@@ -1,0 +1,261 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Entrada de Estoque - Controle de Estoque</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="manifest" href="manifest.json">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1e40af">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="notifications"></div>
+<div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar">
+      <button class="sidebar-toggle" id="sidebar-toggle"><i class="fas fa-bars"></i></button>
+      <span class="topbar-title">Entrada de Estoque</span>
+      <div class="topbar-actions">
+        <div class="topbar-search" style="position:relative">
+          <i class="fas fa-search"></i>
+          <input type="text" id="global-search" placeholder="Buscar...">
+          <div class="search-results" id="search-results"></div>
+        </div>
+      </div>
+    </header>
+
+    <main class="page-content">
+      <div class="page-header">
+        <div>
+          <h2><i class="fas fa-circle-arrow-down" style="color:var(--color-success);margin-right:8px"></i>Entrada de Estoque</h2>
+          <p>Registre a entrada de materiais e atualize o estoque</p>
+        </div>
+      </div>
+
+      <div class="grid-2" style="align-items:start">
+        <!-- FORM -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Nova Entrada</span>
+          </div>
+          <div class="form-group">
+            <label>Produto *</label>
+            <div style="position:relative">
+              <input type="text" id="entry-product-search" class="form-control" placeholder="Digite o nome ou código do produto...">
+              <div id="entry-product-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--border-radius);z-index:100;max-height:200px;overflow-y:auto;box-shadow:var(--shadow)"></div>
+            </div>
+            <input type="hidden" id="entry-product-id">
+          </div>
+
+          <!-- PRODUCT PREVIEW -->
+          <div id="entry-product-preview" style="display:none;background:var(--bg-secondary);border-radius:var(--border-radius);padding:14px;margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-weight:700" id="prev-name"></div>
+                <span class="product-code" id="prev-code"></span>
+              </div>
+              <div style="text-align:right">
+                <div style="font-size:22px;font-weight:800" id="prev-qty"></div>
+                <div style="font-size:12px;color:var(--text-muted)" id="prev-unit"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Quantidade *</label>
+              <input type="number" id="entry-qty" class="form-control" placeholder="0" min="1">
+            </div>
+            <div class="form-group">
+              <label>Data *</label>
+              <input type="date" id="entry-date" class="form-control">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Número de NF / Documento</label>
+            <input type="text" id="entry-doc" class="form-control" placeholder="Ex: NF-0001234">
+          </div>
+          <div class="form-group">
+            <label>Observação</label>
+            <textarea id="entry-obs" class="form-control" placeholder="Informações adicionais..."></textarea>
+          </div>
+          <button class="btn btn-success w-100 btn-lg" onclick="registerEntry()">
+            <i class="fas fa-check"></i> Registrar Entrada
+          </button>
+        </div>
+
+        <!-- RECENT ENTRIES -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Entradas Recentes</span>
+            <span id="entries-count" class="badge badge-primary">0</span>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Qtd</th>
+                  <th>Data</th>
+                  <th>Usuário</th>
+                </tr>
+              </thead>
+              <tbody id="entries-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/db.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/app.js"></script>
+<script>
+  let session;
+
+  DB.init().then(() => {
+    session = Auth.denyUser();
+    if (!session) return;
+    UI.renderSidebar('entrada');
+    initProductSearch();
+    renderEntries();
+    const today = new Date().toISOString().split('T')[0];
+    const dateEl = document.getElementById('entry-date');
+    if (dateEl) dateEl.value = today;
+  });
+
+  function initProductSearch() {
+    const input = document.getElementById('entry-product-search');
+    const dropdown = document.getElementById('entry-product-dropdown');
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      if (q.length < 1) { dropdown.style.display = 'none'; return; }
+
+      const matches = DB.getProducts().filter(p =>
+        p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q)
+      ).slice(0, 8);
+
+      if (matches.length === 0) {
+        dropdown.innerHTML = '<div style="padding:12px;color:var(--text-muted);font-size:13px">Nenhum produto encontrado</div>';
+      } else {
+        dropdown.innerHTML = matches.map(p => `
+          <div onclick="selectProduct('${p.id}')" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border-color);transition:var(--transition)" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
+            <div style="font-weight:600;font-size:13px">${Utils.esc(p.name)}</div>
+            <div style="font-size:11.5px;color:var(--text-muted)">${Utils.esc(p.code)} · Estoque atual: ${p.quantity} ${Utils.esc(p.unit || '')}</div>
+          </div>
+        `).join('');
+      }
+      dropdown.style.display = 'block';
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!input.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.style.display = 'none';
+      }
+    });
+  }
+
+  function selectProduct(id) {
+    const p = DB.getProduct(id);
+    if (!p) return;
+    document.getElementById('entry-product-id').value = id;
+    document.getElementById('entry-product-search').value = `${p.name} (${p.code})`;
+    document.getElementById('entry-product-dropdown').style.display = 'none';
+
+    document.getElementById('prev-name').textContent = p.name;
+    document.getElementById('prev-code').textContent = p.code;
+    document.getElementById('prev-qty').textContent = p.quantity;
+    document.getElementById('prev-unit').textContent = `${p.unit || 'unidade'} em estoque`;
+    document.getElementById('entry-product-preview').style.display = 'block';
+  }
+
+  function registerEntry() {
+    const productId = document.getElementById('entry-product-id').value;
+    const qty = parseInt(document.getElementById('entry-qty').value) || 0;
+    const date = document.getElementById('entry-date').value;
+    const obs = document.getElementById('entry-obs').value.trim();
+    const doc = document.getElementById('entry-doc').value.trim();
+
+    if (!productId) { UI.notify('Selecione um produto', 'warning'); return; }
+    if (qty <= 0) { UI.notify('Informe uma quantidade válida', 'warning'); return; }
+    if (!date) { UI.notify('Informe a data', 'warning'); return; }
+
+    const product = DB.getProduct(productId);
+    if (!product) return;
+
+    DB.addEntry({
+      productId,
+      productCode: product.code,
+      productName: product.name,
+      quantity: qty,
+      date: new Date(date + 'T12:00:00').toISOString(),
+      observation: obs || (doc ? `Documento: ${doc}` : ''),
+      document: doc,
+      userId: session.userId,
+      userName: session.userName,
+    });
+
+    DB.addLog('ACTION', session.userId, session.userName, `Entrada: ${qty}x ${product.name} (${product.code})`);
+    UI.notify(`Entrada de ${qty}x ${product.name} registrada!`, 'success');
+
+    /* Limpar form */
+    document.getElementById('entry-product-id').value = '';
+    document.getElementById('entry-product-search').value = '';
+    document.getElementById('entry-qty').value = '';
+    document.getElementById('entry-obs').value = '';
+    document.getElementById('entry-doc').value = '';
+    document.getElementById('entry-product-preview').style.display = 'none';
+
+    renderEntries();
+    UI.renderSidebar('entrada');
+  }
+
+  function renderEntries() {
+    const entries = DB.getEntries().slice(0, 20);
+    document.getElementById('entries-count').textContent = DB.getEntries().length;
+    const tbody = document.getElementById('entries-tbody');
+
+    if (entries.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" class="table-empty"><i class="fas fa-inbox"></i>Nenhuma entrada registrada</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = entries.map(e => `
+      <tr>
+        <td>
+          <div style="font-weight:600;font-size:13px">${Utils.esc(e.productName)}</div>
+          <div class="product-code">${Utils.esc(e.productCode)}</div>
+        </td>
+        <td style="color:var(--color-success);font-weight:700">+${e.quantity}</td>
+        <td style="color:var(--text-muted);font-size:12px">${Utils.formatDate(e.date)}</td>
+        <td style="color:var(--text-muted);font-size:12px">${Utils.esc(e.userName)}</td>
+      </tr>
+    `).join('');
+  }
+
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}
+</script></body>
+</html>
+
+
+
+
+
